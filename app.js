@@ -75,20 +75,33 @@ function errorView(e, retry) {
 
 
 // بيعرض آخر بيانات محفوظة على الموبايل فوراً، وبعدين بيحدّثها من الشيت في الخلفية.
+const FRESH_MS = 60 * 1000; // لو البيانات أحدث من دقيقة مش بنطلبها تاني
+function putView(key, d) { store.set('v_' + key, { t: Date.now(), d }); }
+function markStale() { ['dash', 'journal', 'partners'].forEach(k => { const v = store.get('v_' + k, null); if (v) { v.t = 0; store.set('v_' + k, v); } }); }
+
 async function showCached(cacheKey, fetcher, render, retry) {
   const key = 'v_' + cacheKey, here = location.hash;
   const old = store.get(key, null);
   const sync = $('#sync');
-  if (old) render(old); else loading();
+  if (old && old.d !== undefined) render(old.d); else loading();
+  if (old && old.d !== undefined && Date.now() - old.t < FRESH_MS) return;
   sync.hidden = false;
   try {
     const fresh = await fetcher();
-    store.set(key, fresh);
+    putView(cacheKey, fresh);
     if (location.hash === here) render(fresh);
   } catch (e) {
     if (!old) errorView(e, retry);
     else toast('مش قادر يحدّث دلوقتي. دي آخر بيانات اتحفظت.', true);
   } finally { sync.hidden = true; }
+}
+
+// طلب واحد بيجيب الرئيسية والسجل والشركاء مرة واحدة
+async function fetchAll() {
+  await loadConfig();
+  const all = await api.get('all');
+  putView('journal', all.journal); putView('partners', all.partners);
+  return all.dashboard;
 }
 
 // ===================== التوجيه =====================
@@ -169,7 +182,7 @@ function viewSettings() {
 
 // ===================== الرئيسية =====================
 function viewHome() {
-  showCached('dash', async () => { await loadConfig(); return api.get('dashboard'); }, renderHome, viewHome);
+  showCached('dash', fetchAll, renderHome, viewHome);
 }
 function renderHome(d) {
   const cfg = CFG || { hoshas: [], years: [] };
@@ -215,7 +228,7 @@ function renderHome(d) {
   $('#installBtn').onclick = doInstall;
   $('#year').onchange = async ev => {
     loading('بيغيّر السنة…');
-    try { await api.post('setYear', { year: Number(ev.target.value) }); } catch (e) { toast(e.message, true); }
+    try { await api.post('setYear', { year: Number(ev.target.value) }); markStale(); } catch (e) { toast(e.message, true); }
     viewHome();
   };
 }
@@ -293,7 +306,7 @@ async function submitWith(form, action, collect, done) {
     try { data = collect(); } catch (e) { return toast(e.message, true); }
     data.user = store.get('user', '');
     btn.disabled = true; const old = btn.textContent; btn.textContent = 'بيحفظ…';
-    try { const r = await api.post(action, data); toast('اتسجّل بنجاح'); done(r); }
+    try { const r = await api.post(action, data); markStale(); toast('اتسجّل بنجاح'); done(r); }
     catch (e) { toast(e.message, true); }
     finally { btn.disabled = false; btn.textContent = old; }
   };
@@ -451,12 +464,12 @@ async function viewAsset() {
 }
 
 // ===================== السجل والشركاء =====================
-function viewJournal() { showCached('journal', () => api.get('journal', { limit: 80 }), renderJournal, viewJournal); }
+function viewJournal() { showCached('journal', () => api.get('journal'), renderJournal, viewJournal); }
 function renderJournal(items) {
   const label = { expense: 'مصروف', move: 'شريك', sale: 'بيع' };
   const sub = i => i.kind === 'expense' ? `${esc(i.center)} · ${esc(i.by)}${i.supplier ? ' · ' + esc(i.supplier) : ''}`
     : i.kind === 'move' ? esc(i.partner) : `${esc(i.center)} · ${esc(i.dest)}${i.buyer ? ' · ' + esc(i.buyer) : ''}`;
-  view().innerHTML = `${bar('السجل', '', `<a class="icon-btn" href="#journal" onclick="route();return false" aria-label="تحديث">${ICON.refresh}</a>`)}
+  view().innerHTML = `${bar('السجل', '', `<a class="icon-btn" href="#journal" onclick="markStale();route();return false" aria-label="تحديث">${ICON.refresh}</a>`)}
   <div class="wrap"><div class="list">${items.length ? items.map(i => `<div class="item"><div>
     <div class="t">${esc(i.title)}<span class="tag">${label[i.kind]}</span></div>
     <div class="s">${esc(i.date)} · ${sub(i)}${i.desc ? ' · ' + esc(i.desc) : ''}</div></div>

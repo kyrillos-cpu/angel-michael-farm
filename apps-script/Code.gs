@@ -27,6 +27,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('الأب')
     .addItem('تحديد الكود السري', 'setAppKey')
+    .addItem('تشغيل التسريع التلقائي', 'enableWarmUp')
     .addToUi();
 }
 
@@ -38,6 +39,38 @@ function setAppKey() {
   if (key.length < 6) { ui.alert('الكود لازم يكون ٦ حروف أو أرقام على الأقل.'); return; }
   PropertiesService.getScriptProperties().setProperty('APP_KEY', key);
   ui.alert('تم حفظ الكود السري.');
+}
+
+// ===================== التسريع =====================
+// الردود بتتحفظ في الكاش لحد ما حد يسجّل حركة جديدة، فالقراية بتبقى سريعة.
+const READ_KEYS = ['dashboard', 'journal', 'partners', 'all'];
+function cache_() { return CacheService.getScriptCache(); }
+function cached_(key, ttl, build) {
+  const c = cache_(), hit = c.get(key);
+  if (hit) return JSON.parse(hit);
+  const val = build();
+  try { c.put(key, JSON.stringify(val), ttl); } catch (e) { /* أكبر من حد الكاش */ }
+  return val;
+}
+function clearCache_() {
+  const names = sh_(SH.hosha).getRange('A2:A9').getValues().map(r => 'hosha_' + r[0]);
+  cache_().removeAll(READ_KEYS.concat(names, ['config']));
+}
+function getAll_() {
+  return { dashboard: cached_('dashboard', 21600, getDashboard_), journal: cached_('journal', 21600, () => getRecent_(80)), partners: cached_('partners', 21600, getPartners_) };
+}
+
+/** أي تعديل بإيدك في الشيت بيمسح الكاش، عشان الأب يعرض الأرقام الجديدة. */
+function onEdit() { try { clearCache_(); } catch (e) { /* ignore */ } }
+
+/** بيتشغل أوتوماتيك كل ١٠ دقايق: بيجهّز الأرقام ويخلّي السكريبت صاحي. */
+function warmUp() { getAll_(); cached_('config', 21600, getConfig_); }
+
+function enableWarmUp() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'warmUp').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('warmUp').timeBased().everyMinutes(10).create();
+  warmUp();
+  try { SpreadsheetApp.getUi().alert('تم تشغيل التسريع التلقائي.'); } catch (e) { /* من المحرر */ }
 }
 
 // ===================== نقطة الدخول =====================
@@ -61,11 +94,12 @@ function handle_(p, data) {
     let result;
     if (data === null) {
       if (a === 'ping') result = { pong: true };
-      else if (a === 'config') result = getConfig_();
-      else if (a === 'dashboard') result = getDashboard_();
-      else if (a === 'journal') result = getRecent_(Number(p.limit) || 60);
-      else if (a === 'hosha') result = getHosha_(p.name);
-      else if (a === 'partners') result = getPartners_();
+      else if (a === 'config') result = cached_('config', 21600, getConfig_);
+      else if (a === 'all') result = getAll_();
+      else if (a === 'dashboard') result = cached_('dashboard', 21600, getDashboard_);
+      else if (a === 'journal') result = cached_('journal', 21600, () => getRecent_(80));
+      else if (a === 'hosha') result = cached_('hosha_' + p.name, 21600, () => getHosha_(p.name));
+      else if (a === 'partners') result = cached_('partners', 21600, getPartners_);
       else throw new Error('طلب غير معروف');
     } else {
       const lock = LockService.getScriptLock();
@@ -78,6 +112,7 @@ function handle_(p, data) {
         else if (a === 'setYear') result = setYear_(data);
         else throw new Error('طلب غير معروف');
         SpreadsheetApp.flush();
+        clearCache_();
       } finally { lock.releaseLock(); }
     }
     return out_({ ok: true, data: result });
@@ -123,7 +158,15 @@ function nextId_(sheet, lastRow) {
 
 /** بيكتب قيم في أعمدة معينة بس، عشان أعمدة المعادلات تفضل شغالة. */
 function writeCols_(sheet, row, map) {
-  Object.keys(map).forEach(c => sheet.getRange(row, Number(c)).setValue(map[c]));
+  // بيجمع الأعمدة المتجاورة في كتابة واحدة عشان السرعة
+  const cols = Object.keys(map).map(Number).sort((a, b) => a - b);
+  let i = 0;
+  while (i < cols.length) {
+    let j = i;
+    while (j + 1 < cols.length && cols[j + 1] === cols[j] + 1) j++;
+    sheet.getRange(row, cols[i], 1, j - i + 1).setValues([cols.slice(i, j + 1).map(c => map[c])]);
+    i = j + 1;
+  }
 }
 
 function requireIn_(value, list, label) {
@@ -168,16 +211,17 @@ function getConfig_() {
 }
 
 function getDashboard_() {
-  const d = sh_(SH.dash);
-  const k = d.getRange('B7:G7').getValues()[0];
-  const p = d.getRange('B11:F12').getValues();
-  const h = d.getRange('B17:H25').getValues();
-  const m = d.getRange('B29:C40').getValues();
+  const v = sh_(SH.dash).getRange('B4:H40').getValues(); // قراية واحدة بدل خمسة
+  const at = (r, c) => v[r - 4][c - 2];
+  const k = v[3].slice(0, 6);
+  const p = [v[7].slice(0, 5), v[8].slice(0, 5)];
+  const h = v.slice(13, 22);
+  const m = v.slice(25, 37).map(r => r.slice(0, 2));
   return {
-    year: d.getRange('C4').getValue(),
+    year: at(4, 3),
     kpis: { yearCost: num_(k[0]), totalCost: num_(k[1]), perFeddan: num_(k[2]), cash: num_(k[3]), yearSales: num_(k[4]), assets: num_(k[5]) },
     partners: p.filter(r => r[0] !== '').map(r => ({ name: r[0], share: num_(r[1]), net: num_(r[2]), balance: num_(r[3]), status: r[4] })),
-    settleText: d.getRange('B13').getValue(),
+    settleText: at(13, 2),
     hoshas: h.slice(0, 8).map(r => ({ name: r[0], area: num_(r[1]), status: r[2], crop: r[3], yearCost: num_(r[4]), totalCost: num_(r[5]), perFeddan: num_(r[6]) })),
     total: { area: num_(h[8][1]), yearCost: num_(h[8][4]), totalCost: num_(h[8][5]), perFeddan: num_(h[8][6]) },
     monthly: m.map(r => ({ month: r[0], cost: num_(r[1]) })),
@@ -260,7 +304,7 @@ function getHosha_(name) {
 
 // ===================== الكتابة =====================
 function addExpense_(d) {
-  const cfg = getConfig_();
+  const cfg = cached_('config', 21600, getConfig_);
   requireIn_(d.item, cfg.items.map(x => x.name), 'البند');
   requireIn_(d.center, cfg.costCenters, 'مركز التكلفة');
   requireIn_(d.paidBy, cfg.payMethods, 'طريقة الدفع');
@@ -274,7 +318,7 @@ function addExpense_(d) {
 }
 
 function addMove_(d) {
-  const cfg = getConfig_();
+  const cfg = cached_('config', 21600, getConfig_);
   requireIn_(d.partner, cfg.partners.map(x => x.name), 'الشريك');
   requireIn_(d.type, cfg.moveTypes, 'نوع الحركة');
   const s = sh_(SH.moves);
@@ -294,7 +338,7 @@ function addMove_(d) {
 }
 
 function addSale_(d) {
-  const cfg = getConfig_();
+  const cfg = cached_('config', 21600, getConfig_);
   requireIn_(d.hosha, cfg.hoshas.map(x => x.name), 'الحوشة');
   const s = sh_(SH.sales);
   const qty = amount_(d.qty, 'الكمية'), price = amount_(d.price, 'السعر');
@@ -321,7 +365,7 @@ function addSale_(d) {
 }
 
 function addAsset_(d) {
-  const cfg = getConfig_();
+  const cfg = cached_('config', 21600, getConfig_);
   const centers = cfg.costCenters.filter(c => c !== 'أصل ثابت');
   requireIn_(d.center, centers, 'يتحمّل على');
   const life = amount_(d.life, 'العمر');
