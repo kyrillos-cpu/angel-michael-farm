@@ -73,6 +73,24 @@ function errorView(e, retry) {
   $('#retry').onclick = retry;
 }
 
+
+// بيعرض آخر بيانات محفوظة على الموبايل فوراً، وبعدين بيحدّثها من الشيت في الخلفية.
+async function showCached(cacheKey, fetcher, render, retry) {
+  const key = 'v_' + cacheKey, here = location.hash;
+  const old = store.get(key, null);
+  const sync = $('#sync');
+  if (old) render(old); else loading();
+  sync.hidden = false;
+  try {
+    const fresh = await fetcher();
+    store.set(key, fresh);
+    if (location.hash === here) render(fresh);
+  } catch (e) {
+    if (!old) errorView(e, retry);
+    else toast('مش قادر يحدّث دلوقتي. دي آخر بيانات اتحفظت.', true);
+  } finally { sync.hidden = true; }
+}
+
 // ===================== التوجيه =====================
 const routes = {
   home: viewHome, hoshas: viewHoshas, hosha: viewHosha, add: viewAdd, expense: viewExpense, sale: viewSale,
@@ -89,6 +107,16 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 window.addEventListener('DOMContentLoaded', route);
+
+// ===================== التثبيت كأبلكيشن =====================
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; const b = $('#installBtn'); if (b) b.hidden = false; });
+async function doInstall() {
+  if (!installEvt) return toast('من قايمة ⋮ في Chrome اختار "Install app" أو "Add to Home screen"');
+  installEvt.prompt(); await installEvt.userChoice; installEvt = null;
+  const b = $('#installBtn'); if (b) b.hidden = true;
+}
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 
 // ===================== الإعداد أول مرة =====================
 function settingsForm(isSetup) {
@@ -130,18 +158,21 @@ function viewSetup() {
 
 function viewSettings() {
   view().innerHTML = `${bar('الإعدادات', '#home')}<div class="wrap"><div class="card">${settingsForm(false)}</div>
+    <button class="btn" id="install2">تثبيت الأب على الموبايل</button>
     <button class="btn ghost" id="reloadCfg">تحديث القوائم من الشيت</button>
     <button class="btn ghost" id="logout">خروج من الموبايل ده</button></div>`;
   $('#setForm').onsubmit = saveSettings;
+  $('#install2').onclick = doInstall;
   $('#reloadCfg').onclick = async () => { try { await loadConfig(true); toast('القوائم اتحدثت'); } catch (e) { toast(e.message, true); } };
-  $('#logout').onclick = () => { ['api', 'key', 'cfg'].forEach(store.del); CFG = null; location.hash = ''; route(); };
+  $('#logout').onclick = () => { ['api', 'key', 'cfg', 'v_dash', 'v_journal', 'v_partners'].forEach(store.del); CFG = null; location.hash = ''; route(); };
 }
 
 // ===================== الرئيسية =====================
-async function viewHome() {
-  loading();
-  let d, cfg;
-  try { [d, cfg] = await Promise.all([api.get('dashboard'), loadConfig()]); } catch (e) { return errorView(e, viewHome); }
+function viewHome() {
+  showCached('dash', async () => { await loadConfig(); return api.get('dashboard'); }, renderHome, viewHome);
+}
+function renderHome(d) {
+  const cfg = CFG || { hoshas: [], years: [] };
   const maxM = Math.max(1, ...d.monthly.map(m => m.cost));
   const years = (cfg.years || []).map(y => `<option ${y == d.year ? 'selected' : ''}>${y}</option>`).join('');
   const partnerPill = p => {
@@ -152,7 +183,7 @@ async function viewHome() {
   view().innerHTML = `
   <section class="hero">
     <div class="top"><span class="sub">${esc(store.get('user', '') ? 'أهلاً يا ' + store.get('user', '') : 'أهلاً')}</span>
-      <a class="icon-btn" style="color:#fff" href="#settings" aria-label="الإعدادات">${ICON.gear}</a></div>
+      <span><button class="chip" id="installBtn" ${installEvt ? '' : 'hidden'} style="border:0;margin-inline-end:6px">تثبيت الأب</button><a class="icon-btn" style="color:#fff" href="#settings" aria-label="الإعدادات">${ICON.gear}</a></span></div>
     <h1>${esc(cfg.farm || 'مزرعة الملاك ميخائيل')} – ${esc(cfg.location || 'ديروط')}</h1>
     <div class="top"><span class="sub">${cfg.hoshas.length} حوش · ${fmt(d.total.area)} فدان</span>
       <label class="sub">السنة <select class="year-select" id="year" aria-label="السنة">${years}</select></label></div>
@@ -181,6 +212,7 @@ async function viewHome() {
       <div class="grid2">${d.hoshas.map(hoshaCard).join('')}</div>
     </section>
   </div>`;
+  $('#installBtn').onclick = doInstall;
   $('#year').onchange = async ev => {
     loading('بيغيّر السنة…');
     try { await api.post('setYear', { year: Number(ev.target.value) }); } catch (e) { toast(e.message, true); }
@@ -196,10 +228,8 @@ function hoshaCard(h) {
     <span class="muted">${fmt(h.perFeddan)} / فدان</span></a>`;
 }
 
-async function viewHoshas() {
-  loading();
-  let d;
-  try { d = await api.get('dashboard'); } catch (e) { return errorView(e, viewHoshas); }
+function viewHoshas() { showCached('dash', () => api.get('dashboard'), renderHoshas, viewHoshas); }
+function renderHoshas(d) {
   view().innerHTML = `${bar('الحوش')}<div class="wrap">
     <div class="card"><div class="row"><span class="muted">إجمالي تكلفة التأسيس</span><b>${fmt(d.total.totalCost)}</b></div>
     <div class="row"><span class="muted">متوسط الفدان</span><b>${fmt(d.total.perFeddan)}</b></div></div>
@@ -207,10 +237,8 @@ async function viewHoshas() {
     <p class="hint">الأرقام هنا تراكمية من أول التأسيس، وشاملة نصيب كل حوشة من المصروفات المشتركة وإهلاك الأصول.</p></div>`;
 }
 
-async function viewHosha(name) {
-  loading();
-  let h;
-  try { h = await api.get('hosha', { name }); } catch (e) { return errorView(e, () => viewHosha(name)); }
+function viewHosha(name) { showCached('hosha_' + name, () => api.get('hosha', { name }), renderHosha, () => viewHosha(name)); }
+function renderHosha(h) {
   const max = Math.max(1, ...h.breakdown.map(b => b.amount));
   view().innerHTML = `
   <section class="hero">
@@ -423,10 +451,8 @@ async function viewAsset() {
 }
 
 // ===================== السجل والشركاء =====================
-async function viewJournal() {
-  loading();
-  let items;
-  try { items = await api.get('journal', { limit: 80 }); } catch (e) { return errorView(e, viewJournal); }
+function viewJournal() { showCached('journal', () => api.get('journal', { limit: 80 }), renderJournal, viewJournal); }
+function renderJournal(items) {
   const label = { expense: 'مصروف', move: 'شريك', sale: 'بيع' };
   const sub = i => i.kind === 'expense' ? `${esc(i.center)} · ${esc(i.by)}${i.supplier ? ' · ' + esc(i.supplier) : ''}`
     : i.kind === 'move' ? esc(i.partner) : `${esc(i.center)} · ${esc(i.dest)}${i.buyer ? ' · ' + esc(i.buyer) : ''}`;
@@ -438,10 +464,8 @@ async function viewJournal() {
   <p class="hint">التعديل والمسح بيتعملوا من الشيت نفسه.</p></div>`;
 }
 
-async function viewPartners() {
-  loading();
-  let d;
-  try { d = await api.get('partners'); } catch (e) { return errorView(e, viewPartners); }
+function viewPartners() { showCached('partners', () => api.get('partners'), renderPartners, viewPartners); }
+function renderPartners(d) {
   const card = p => {
     const cls = p.balance > 0.5 ? 'pos' : p.balance < -0.5 ? 'neg' : '';
     const line = (l, v) => `<div class="row"><span class="muted">${l}</span><span>${fmt(v)}</span></div>`;
