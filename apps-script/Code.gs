@@ -207,7 +207,19 @@ function getConfig_() {
     years: col_(st, 'G16:G26'),
     suppliers: col_(sup, 'A2:A' + sup.getMaxRows()),
     year: sh_(SH.dash).getRange('C4').getValue(),
+    tr: getTranslations_(),
   };
+}
+
+/** الأسماء بالإنجليزي: من عمود J في الحوش، وD في البنود، وجدول الترجمة في الإعدادات. */
+function getTranslations_() {
+  const tr = {};
+  const add = rows => rows.forEach(r => { if (r[0] !== '' && r[r.length - 1] !== '') tr[String(r[0])] = String(r[r.length - 1]); });
+  add(sh_(SH.hosha).getRange('A2:J9').getValues().map(r => [r[0], r[9]]));
+  add(sh_(SH.items).getRange('A2:D100').getValues().map(r => [r[0], r[3]]));
+  const st = sh_(SH.settings);
+  add(st.getRange(30, 2, st.getMaxRows() - 29, 2).getValues());
+  return tr;
 }
 
 function getDashboard_() {

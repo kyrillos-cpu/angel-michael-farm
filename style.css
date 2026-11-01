@@ -107,3 +107,6 @@ legend { padding: 0; margin-bottom: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty { text-align: center; color: var(--muted); padding: 24px 10px; font-size: 14px; }
 #sync { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(23,37,28,.85); color: #fff; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 999px; z-index: 30; }
+
+[dir="ltr"] .icon-btn.back svg { transform: scaleX(-1); }
+.lang-btn { border: 0; background: rgba(255,255,255,.16); color: #fff; min-width: 40px; min-height: 32px; font-size: 13px; cursor: pointer; }

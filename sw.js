@@ -1,5 +1,5 @@
 // بيخلّي الأب يفتح بسرعة ويتثبّت كأبلكيشن. طلبات الشيت نفسها مش بتتخزن هنا.
-const CACHE = 'amf-v4';
+const CACHE = 'amf-v5';
 const SHELL = ['./', 'index.html', 'app.js', 'style.css', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
