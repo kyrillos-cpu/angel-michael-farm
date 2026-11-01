@@ -53,9 +53,9 @@ const STR = {
     saveAsset: 'حفظ الأصل', enterAssetName: 'اكتب اسم الأصل', enterCostLife: 'اكتب التكلفة والعمر',
     journal: 'السجل', refresh: 'تحديث', kExpense: 'مصروف', kMove: 'شريك', kSale: 'بيع', saleOf: 'بيع', cropDefault: 'محصول',
     noEntries: 'لسه مفيش حركات. ابدأ من زرار + تحت.', editInSheet: 'التعديل والمسح بيتعملوا من الشيت نفسه.',
-    partners: 'الشركاء', contributions: 'توريدات للخزنة', outOfPocket: 'مدفوع من جيبه', settlementsPaid: 'تسويات دفعها',
+    partners: 'الشركاء', contributions: 'توريد للخزنة', outOfPocket: 'مدفوع من جيبه', settlementsPaid: 'تسويات دفعها',
     withdrawals: 'سحب من الخزنة', settlementsReceived: 'تسويات استلمها', salesReceived: 'مبيعات استلمها', salesShare: 'نصيبه من مبيعات موزعة',
-    net: 'صافي المدفوع', fair: 'المفروض حسب النسبة', addMoveBtn: 'تسجيل توريد أو تسوية',
+    net: 'إجمالي التوريد', fair: 'نصيبه حسب النسبة', addMoveBtn: 'تسجيل توريد أو تسوية',
     isOwed: 'له', owes: 'عليه', even: 'متساوي', settledAll: 'الشريكين متساويين، مفيش تسوية مطلوبة',
     settleSentence: (payer, recv, a, b) => `${payer} يدفع ${a} ج.م لـ${recv} مباشرة، أو يورّد ${b} ج.م للخزنة، عشان الاتنين يتساووا`,
   },
@@ -103,7 +103,7 @@ const STR = {
     noEntries: 'No entries yet. Start with the + button below.', editInSheet: 'Editing and deleting are done in the sheet.',
     partners: 'Partners', contributions: 'Deposits to cash box', outOfPocket: 'Paid personally', settlementsPaid: 'Settlements paid',
     withdrawals: 'Withdrawals', settlementsReceived: 'Settlements received', salesReceived: 'Sales received', salesShare: 'Share of split sales',
-    net: 'Net paid in', fair: 'Fair share', addMoveBtn: 'Record a deposit or settlement',
+    net: 'Total deposited', fair: 'Share by percentage', addMoveBtn: 'Record a deposit or settlement',
     isOwed: 'is owed', owes: 'owes', even: 'settled', settledAll: 'Partners are even; no settlement needed',
     settleSentence: (payer, recv, a, b) => `${payer} pays ${a} EGP directly to ${recv}, or deposits ${b} EGP to the cash box, to even out.`,
   },
@@ -112,6 +112,9 @@ const T = (k, ...a) => { const v = (STR[LANG] && STR[LANG][k]) || STR.ar[k]; ret
 
 // ترجمة الأسماء اللي جاية من الشيت (الحوش، البنود، القوائم…)
 const EXTRA_TR = { 'مصروفات مشتركة (نصيب الحوشة)': 'Shared expenses (plot share)', 'إهلاك الأصول (نصيب الحوشة)': 'Asset depreciation (plot share)', 'أخرى': 'Other' };
+// أسماء الشركاء بتظهر بالإنجليزي دايماً
+const PARTNER_EN = { 'كيرلس موسى': 'Kyrillos Moussa', 'ميلاد رزق': 'Milad Rezk' };
+const pn = v => PARTNER_EN[v] || (CFG && CFG.tr && CFG.tr[v]) || v;
 const dn = v => (LANG === 'en' && v !== undefined && v !== null ? ((CFG && CFG.tr && CFG.tr[v]) || EXTRA_TR[v] || v) : v);
 
 function applyLang() {
@@ -182,7 +185,7 @@ function settleText(rows) {
   const payer = rows.find(p => p.balance < -0.5), recv = rows.find(p => p.balance > 0.5);
   if (!payer || !recv) return T('settledAll');
   const amt = Math.abs(payer.balance), share = payer.share || 0.5;
-  return T('settleSentence', dn(payer.name), dn(recv.name), fmt(amt), fmt(amt / (1 - share)));
+  return T('settleSentence', pn(payer.name), pn(recv.name), fmt(amt), fmt(amt / (1 - share)));
 }
 
 const ICON = {
@@ -332,7 +335,7 @@ function renderHome(d) {
   const partnerPill = p => {
     const cls = p.balance > 0.5 ? 'pill-pos' : p.balance < -0.5 ? 'pill-neg' : 'pill-zero';
     const tcls = p.balance > 0.5 ? 'pos' : p.balance < -0.5 ? 'neg' : '';
-    return `<div class="row ${cls}"><b>${esc(dn(p.name))}</b><b class="${tcls}">${signed(p.balance)} ${statusWord(p.balance)}</b></div>`;
+    return `<div class="row ${cls}"><b dir="ltr">${esc(pn(p.name))}</b><b class="${tcls}">${signed(p.balance)} ${statusWord(p.balance)}</b></div>`;
   };
   view().innerHTML = `
   <section class="hero">
@@ -508,7 +511,7 @@ async function viewMove() {
   let cfg; try { cfg = await loadConfig(); } catch (e) { return errorView(e, viewMove); }
   const types = [['توريد للخزنة', T('depositTxt')], ['سحب من الخزنة', T('withdrawTxt')], ['تسوية مدفوعة', T('settleTxt')]];
   view().innerHTML = `${bar(T('move'), '#add')}<div class="wrap"><form id="f" novalidate>
-    <fieldset><legend>${T('partner')}</legend><div class="seg" data-seg="partner">${cfg.partners.map((p, i) => `<button type="button" data-v="${esc(p.name)}" aria-pressed="${i === 0}">${esc(dn(p.name))}</button>`).join('')}</div></fieldset>
+    <fieldset><legend>${T('partner')}</legend><div class="seg" data-seg="partner">${cfg.partners.map((p, i) => `<button type="button" data-v="${esc(p.name)}" aria-pressed="${i === 0}">${esc(pn(p.name))}</button>`).join('')}</div></fieldset>
     <fieldset><legend>${T('moveType')}</legend>${types.map((t, i) => `<label class="opt"><input type="radio" name="type" value="${t[0]}" ${i === 0 ? 'checked' : ''}>${t[1]}</label>`).join('')}</fieldset>
     <div class="grid2">
       <div class="field"><label for="date">${T('date')}</label><input id="date" type="date" value="${today()}"></div>
@@ -593,7 +596,7 @@ function renderJournal(items) {
   const label = { expense: T('kExpense'), move: T('kMove'), sale: T('kSale') };
   const title = i => i.kind === 'sale' ? `${T('saleOf')} ${String(i.title || '').replace(/^بيع\s*/, '') || T('cropDefault')}` : dn(i.title);
   const sub = i => i.kind === 'expense' ? `${esc(dn(i.center))} · ${esc(dn(i.by))}${i.supplier ? ' · ' + esc(i.supplier) : ''}`
-    : i.kind === 'move' ? esc(dn(i.partner)) : `${esc(dn(i.center))} · ${esc(dn(i.dest))}${i.buyer ? ' · ' + esc(i.buyer) : ''}`;
+    : i.kind === 'move' ? esc(pn(i.partner)) : `${esc(dn(i.center))} · ${esc(dn(i.dest))}${i.buyer ? ' · ' + esc(i.buyer) : ''}`;
   view().innerHTML = `${bar(T('journal'), '', `<a class="icon-btn" href="#journal" onclick="markStale();route();return false" aria-label="${T('refresh')}">${ICON.refresh}</a>`)}
   <div class="wrap"><div class="list">${items.length ? items.map(i => `<div class="item"><div>
     <div class="t">${esc(title(i))}<span class="tag">${label[i.kind]}</span></div>
@@ -608,9 +611,8 @@ function renderPartners(d) {
     const cls = p.balance > 0.5 ? 'pos' : p.balance < -0.5 ? 'neg' : '';
     const line = (k, v) => `<div class="row"><span class="muted">${T(k)}</span><span>${fmt(v)}</span></div>`;
     return `<section class="card" style="border:2px solid ${p.balance > 0.5 ? 'var(--pos)' : p.balance < -0.5 ? 'var(--neg)' : 'var(--border)'}">
-      <div class="row"><h2>${esc(dn(p.name))} <span class="muted">(${Math.round(p.share * 100)}%)</span></h2><b class="${cls}" style="font-size:18px">${signed(p.balance)} ${statusWord(p.balance)}</b></div>
-      ${line('contributions', p.contributions)}${line('outOfPocket', p.outOfPocket)}${line('settlementsPaid', p.settlementsPaid)}
-      ${line('withdrawals', p.withdrawals)}${line('settlementsReceived', p.settlementsReceived)}${line('salesReceived', p.salesReceived)}${line('salesShare', p.salesShare)}
+      <div class="row"><h2 dir="ltr">${esc(pn(p.name))} <span class="muted">(${Math.round(p.share * 100)}%)</span></h2><b class="${cls}" style="font-size:18px">${signed(p.balance)} ${statusWord(p.balance)}</b></div>
+      ${line('contributions', p.contributions + p.outOfPocket + p.settlementsPaid)}${line('withdrawals', p.withdrawals + p.settlementsReceived + p.salesReceived + p.salesShare)}
       <div class="row" style="border-top:1px solid var(--border);padding-top:6px"><b>${T('net')}</b><b>${fmt(p.net)}</b></div>
       <div class="row"><span class="muted">${T('fair')}</span><span>${fmt(p.fair)}</span></div></section>`;
   };
