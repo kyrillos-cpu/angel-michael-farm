@@ -30,6 +30,7 @@ function onOpen() {
     .createMenu('الأب')
     .addItem('تحديد الكود السري', 'setAppKey')
     .addItem('تشغيل التسريع التلقائي', 'enableWarmUp')
+    .addItem('تحديث بيانات الأب الآن', 'refreshApp')
     .addToUi();
 }
 
@@ -66,7 +67,13 @@ function getAll_() {
 function onEdit() { try { clearCache_(); } catch (e) { /* ignore */ } }
 
 /** بيتشغل أوتوماتيك كل ١٠ دقايق: بيجهّز الأرقام ويخلّي السكريبت صاحي. */
-function warmUp() { getAll_(); cached_('config', 21600, getConfig_); }
+function warmUp() { clearCache_(); getAll_(); cached_('config', 21600, getConfig_); }
+
+/** من قايمة "الأب": بيحدّث بيانات الأب فوراً بعد أي تعديل أو استيراد. */
+function refreshApp() {
+  warmUp();
+  try { SpreadsheetApp.getUi().alert('بيانات الأب اتحدثت.'); } catch (e) { /* من المحرر */ }
+}
 
 function enableWarmUp() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'warmUp').forEach(t => ScriptApp.deleteTrigger(t));
