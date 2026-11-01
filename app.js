@@ -419,9 +419,9 @@ function renderHosha(h) {
 function viewAdd() {
   view().innerHTML = `${bar(T('newTitle'), '#home')}<div class="wrap"><div class="menu-grid">
     <a href="#expense"><b>${T('expense')}</b><span>${T('expenseSub')}</span></a>
+    <a href="#asset"><b>${T('asset')}</b><span>${T('assetSub')}</span></a>
     <a href="#move"><b>${T('move')}</b><span>${T('moveSub')}</span></a>
     <a href="#sale"><b>${T('sale')}</b><span>${T('saleSub')}</span></a>
-    <a href="#asset"><b>${T('asset')}</b><span>${T('assetSub')}</span></a>
   </div></div>`;
 }
 
