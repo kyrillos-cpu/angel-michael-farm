@@ -115,3 +115,9 @@ legend { padding: 0; margin-bottom: 8px; }
 .menu-grid a.out b { color: var(--neg); }
 .menu-grid a.in { background: var(--lg); border: 1.5px solid #A9CDB2; }
 .menu-grid a.in b { color: var(--pos); }
+
+.menu-grid a.store { background: #F3EFE4; border: 1.5px solid #D9CDAE; }
+.menu-grid a.store b { color: #7A5B1E; }
+.menu-grid a.wide { grid-column: 1 / -1; min-height: 0; }
+.btn.sm { height: 44px; font-size: 14px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.btn.out { background: var(--neg); }

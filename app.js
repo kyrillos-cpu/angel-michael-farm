@@ -57,6 +57,16 @@ const STR = {
     withdrawals: 'سحب من الخزنة', settlementsReceived: 'تسويات استلمها', salesReceived: 'مبيعات استلمها', salesShare: 'نصيبه من مبيعات موزعة',
     net: 'إجمالي التوريد', fair: 'نصيبه حسب النسبة', addMoveBtn: 'تسجيل توريد أو تسوية',
     isOwed: 'له', owes: 'عليه', even: 'متساوي', settledAll: 'الشريكين متساويين، مفيش تسوية مطلوبة',
+    stock: 'المخزن', stockSub: 'رصيد الأسمدة والمبيدات وقيمته', buy: 'شراء للمخزن', buySub: 'سماد أو مبيد… بيتخصم من الخزنة ويدخل المخزن',
+    issue: 'صرف من المخزن', issueSub: 'على حوشة أو مشترك، بيتحسب بمتوسط سعر الشراء', stockValue: 'قيمة المخزن',
+    product: 'الصنف', newProduct: '+ صنف جديد', productName: 'اسم الصنف', productPh: 'مثال: يوريا 46%', unit: 'الوحدة',
+    nameEn: 'الاسم بالإنجليزي (اختياري)', qtyU: u => `الكمية${u ? ' (' + u + ')' : ''}`, totalPrice: 'إجمالي السعر (ج.م)', unitPrice: 'سعر الوحدة',
+    saveBuy: 'حفظ الشراء', saveIssue: 'حفظ الصرف', balance: 'الرصيد', avgPrice: 'متوسط السعر', available: 'المتاح',
+    enterProduct: 'اختار أو اكتب الصنف', enterQty: 'اكتب الكمية', notEnough: b => `الرصيد مش كفاية، المتاح ${b}`,
+    buyHint: 'الشراء بيتخصم من الخزنة ويتسجل في اليومية على "مخزن"، ومش بيتحسب على أي حوشة غير لما يتصرف.',
+    issueHint: 'الصرف مش بيخصم من الخزنة (اتدفع وقت الشراء). قيمته = الكمية × متوسط سعر الشراء، وبتتحمّل على الحوشة.',
+    noStock: 'المخزن فاضي. ابدأ بـ"شراء للمخزن".', stockMoves: 'آخر حركات المخزن', bought: 'شراء', issued: 'صرف', value: 'القيمة',
+    issueFor: 'الصرف على', emptyStock: 'مفيش رصيد في المخزن',
     settleSentence: (payer, recv, a, b) => `${payer} يدفع ${a} ج.م لـ${recv} مباشرة، أو يورّد ${b} ج.م للخزنة، عشان الاتنين يتساووا`,
   },
   en: {
@@ -105,6 +115,16 @@ const STR = {
     withdrawals: 'Withdrawals', settlementsReceived: 'Settlements received', salesReceived: 'Sales received', salesShare: 'Share of split sales',
     net: 'Total deposited', fair: 'Share by percentage', addMoveBtn: 'Record a deposit or settlement',
     isOwed: 'is owed', owes: 'owes', even: 'settled', settledAll: 'Partners are even; no settlement needed',
+    stock: 'Store', stockSub: 'Fertilizer and pesticide balances and value', buy: 'Buy for store', buySub: 'Fertilizer, pesticide… paid from cash, goes to store',
+    issue: 'Issue from store', issueSub: 'To a plot or shared, at average purchase cost', stockValue: 'Store value',
+    product: 'Product', newProduct: '+ New product', productName: 'Product name', productPh: 'e.g. Urea 46%', unit: 'Unit',
+    nameEn: 'English name (optional)', qtyU: u => `Quantity${u ? ' (' + u + ')' : ''}`, totalPrice: 'Total price (EGP)', unitPrice: 'Unit price',
+    saveBuy: 'Save purchase', saveIssue: 'Save issue', balance: 'Balance', avgPrice: 'Avg price', available: 'Available',
+    enterProduct: 'Pick or type a product', enterQty: 'Enter the quantity', notEnough: b => `Not enough stock, available ${b}`,
+    buyHint: 'A purchase is paid from the cash box and logged against "Store"; it is not charged to any plot until issued.',
+    issueHint: 'An issue does not touch the cash box (paid at purchase). Its value = qty × average purchase price, charged to the plot.',
+    noStock: 'The store is empty. Start with "Buy for store".', stockMoves: 'Recent store entries', bought: 'Purchase', issued: 'Issue', value: 'Value',
+    issueFor: 'Issue to', emptyStock: 'No stock available',
     settleSentence: (payer, recv, a, b) => `${payer} pays ${a} EGP directly to ${recv}, or deposits ${b} EGP to the cash box, to even out.`,
   },
 };
@@ -213,7 +233,7 @@ function errorView(e, retry) {
 // بيعرض آخر بيانات محفوظة فوراً، وبعدين بيحدّثها من الشيت في الخلفية.
 const FRESH_MS = 60 * 1000; // لو البيانات أحدث من دقيقة مش بنطلبها تاني
 function putView(key, d) { store.set('v_' + key, { t: Date.now(), d }); }
-function markStale() { ['dash', 'journal', 'partners'].forEach(k => { const v = store.get('v_' + k, null); if (v) { v.t = 0; store.set('v_' + k, v); } }); }
+function markStale() { ['dash', 'journal', 'partners', 'stock'].forEach(k => { const v = store.get('v_' + k, null); if (v) { v.t = 0; store.set('v_' + k, v); } }); }
 
 async function showCached(cacheKey, fetcher, render, retry) {
   const key = 'v_' + cacheKey, here = location.hash;
@@ -242,7 +262,7 @@ async function fetchAll() {
     if (!/غير معروف/.test(e.message)) throw e; // السكريبت لسه على نسخة قديمة
     return api.get('dashboard');
   }
-  putView('journal', all.journal); putView('partners', all.partners);
+  putView('journal', all.journal); putView('partners', all.partners); if (all.stock) putView('stock', all.stock);
   return all.dashboard;
 }
 
@@ -250,6 +270,7 @@ async function fetchAll() {
 const routes = {
   home: viewHome, hoshas: viewHoshas, hosha: viewHosha, add: viewAdd, expense: viewExpense, sale: viewSale,
   move: viewMove, asset: viewAsset, journal: viewJournal, partners: viewPartners, settings: viewSettings,
+  stock: viewStock, buy: viewBuy, issue: viewIssue,
 };
 
 function route() {
@@ -322,7 +343,7 @@ function viewSettings() {
   $('#setForm').onsubmit = saveSettings;
   $('#install2').onclick = doInstall;
   $('#reloadCfg').onclick = async () => { try { await loadConfig(true); toast(T('listsUpdated')); } catch (e) { toast(e.message, true); } };
-  $('#logout').onclick = () => { ['api', 'key', 'cfg', 'v_dash', 'v_journal', 'v_partners'].forEach(store.del); CFG = null; location.hash = ''; route(); };
+  $('#logout').onclick = () => { ['api', 'key', 'cfg', 'v_dash', 'v_journal', 'v_partners', 'v_stock'].forEach(store.del); CFG = null; location.hash = ''; route(); };
 }
 
 // ===================== الرئيسية =====================
@@ -355,6 +376,7 @@ function renderHome(d) {
       <div class="kpi"><span class="muted">${T('cash')}</span><span class="v ${d.kpis.cash < 0 ? 'neg' : ''}">${fmt(d.kpis.cash)}</span></div>
       <div class="kpi"><span class="muted">${T('yearSales')}</span><span class="v">${fmt(d.kpis.yearSales)}</span></div>
     </div>
+    <a class="card row" href="#stock" style="text-decoration:none;color:inherit"><span><span class="muted">${T('stockValue')}</span><br><b style="font-size:18px">${fmt(d.kpis.stock || 0)}</b> <small class="muted">${T('egp')}</small></span><span class="muted">${T('details')} ›</span></a>
     <section class="card">
       <div class="row"><h2>${T('partnerBalance')}</h2><a href="#partners">${T('details')}</a></div>
       ${d.partners.map(partnerPill).join('')}
@@ -431,6 +453,9 @@ function viewAdd() {
     <a class="out" href="#asset"><b>${T('asset')}</b><span>${T('assetSub')}</span></a>
     <a class="in" href="#move"><b>${T('move')}</b><span>${T('moveSub')}</span></a>
     <a class="in" href="#sale"><b>${T('sale')}</b><span>${T('saleSub')}</span></a>
+    <a class="out" href="#buy"><b>${T('buy')}</b><span>${T('buySub')}</span></a>
+    <a class="store" href="#issue"><b>${T('issue')}</b><span>${T('issueSub')}</span></a>
+    <a class="store wide" href="#stock"><b>${T('stock')}</b><span>${T('stockSub')}</span></a>
   </div></div>`;
 }
 
@@ -619,4 +644,111 @@ function renderPartners(d) {
   view().innerHTML = `${bar(T('partners'))}<div class="wrap">${d.rows.map(card).join('')}
     <div class="note">${esc(settleText(d.rows))}</div>
     <a class="btn" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="#move">${T('addMoveBtn')}</a></div>`;
+}
+
+// ===================== المخزن =====================
+const qf = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-US');
+async function fetchStock() { await loadConfig(); return api.get('stock'); }
+function viewStock() { showCached('stock', fetchStock, renderStock, viewStock); }
+function renderStock(s) {
+  view().innerHTML = `${bar(T('stock'), '#home')}<div class="wrap">
+    <section class="card"><span class="muted">${T('stockValue')}</span><span class="big">${fmt(s.total)} <small style="font-size:15px">${T('egp')}</small></span>
+      <div class="grid2"><a class="btn sm out" href="#buy">${T('buy')}</a><a class="btn sm ghost" href="#issue">${T('issue')}</a></div></section>
+    ${s.items.length ? `<section class="list">${s.items.map(i => `<div class="item"><div><div class="t">${esc(dn(i.name))}</div>
+      <div class="s">${T('avgPrice')} ${qf(i.avg)} · ${T('bought')} ${qf(i.bought)} · ${T('issued')} ${qf(i.issued)}</div></div>
+      <div style="text-align:end"><b class="${i.balance <= 0 ? 'neg' : ''}">${qf(i.balance)} ${esc(dn(i.unit))}</b><div class="s">${fmt(i.value)}</div></div></div>`).join('')}</section>`
+      : `<div class="empty">${T('noStock')}</div>`}
+    ${s.moves && s.moves.length ? `<section class="list"><h2 style="font-size:15px">${T('stockMoves')}</h2>${s.moves.map(m => `<div class="item"><div>
+      <div class="t">${esc(dn(m.product))} <span class="tag">${m.type === 'شراء' ? T('bought') : T('issued')}</span></div>
+      <div class="s">${esc(m.date)} · ${qf(m.qty)} · ${esc(dn(m.type === 'شراء' ? (m.supplier || '') : m.center))}${m.desc ? ' · ' + esc(m.desc) : ''}</div></div>
+      <span class="a ${m.type === 'شراء' ? '' : 'neg'}">${fmt(m.value)}</span></div>`).join('')}</section>` : ''}
+  </div>`;
+}
+
+async function loadStockAndCfg() {
+  const cfg = await loadConfig();
+  let st = store.get('v_stock', null); st = st && st.d;
+  if (!st || Date.now() - (store.get('v_stock', {}).t || 0) > FRESH_MS) { try { st = await api.get('stock'); putView('stock', st); } catch (e) { if (!st) st = { items: [], total: 0, moves: [] }; } }
+  return [cfg, st];
+}
+
+async function viewBuy() {
+  loading();
+  let cfg, st; try { [cfg, st] = await loadStockAndCfg(); } catch (e) { return errorView(e, viewBuy); }
+  const units = cfg.units || ['كجم', 'لتر', 'شيكارة', 'عبوة', 'طن', 'متر مكعب'];
+  const prods = st.items.length ? st.items : (cfg.products || []);
+  view().innerHTML = `${bar(T('buy'), '#add')}<div class="wrap"><form id="f" novalidate>
+    <div class="field"><label for="prod">${T('product')}</label><select id="prod">
+      ${prods.map(p => `<option value="${esc(p.name)}" data-unit="${esc(p.unit)}">${esc(dn(p.name))}</option>`).join('')}<option value="__new" ${prods.length ? '' : 'selected'}>${T('newProduct')}</option></select></div>
+    <div id="newBox" ${prods.length ? 'hidden' : ''} class="card" style="gap:10px">
+      <div class="field"><label for="pname">${T('productName')}</label><input id="pname" placeholder="${T('productPh')}"></div>
+      <div class="grid2"><div class="field"><label for="pitem">${T('item')}</label><select id="pitem">${itemOptions(cfg, i => i.group !== 'أصول')}</select></div>
+      <div class="field"><label for="punit">${T('unit')}</label><select id="punit">${units.map(u => `<option value="${esc(u)}">${esc(dn(u))}</option>`).join('')}</select></div></div>
+      <div class="field"><label for="pen">${T('nameEn')}</label><input id="pen" dir="ltr"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label for="qty" id="qtyL">${T('qtyU')}</label><input id="qty" type="number" inputmode="decimal" min="0" step="any"></div>
+      <div class="field"><label for="total">${T('totalPrice')}</label><input id="total" type="number" inputmode="decimal" min="0" step="any"></div>
+    </div>
+    <p class="hint" id="up"></p>
+    <div class="field"><label for="date">${T('date')}</label><input id="date" type="date" value="${today()}"></div>
+    <div class="field"><label for="supplier">${T('supplier')}</label><input id="supplier" list="suppliers" placeholder="${T('supplierPh')}">${supplierList(cfg)}</div>
+    <div class="field"><label for="desc">${T('desc')}</label><input id="desc"></div>
+    <p class="hint">${T('buyHint')}</p>
+    <button class="btn" type="submit">${T('saveBuy')}</button>
+  </form></div>`;
+  const unitNow = () => $('#prod').value === '__new' ? $('#punit').value : $('#prod').selectedOptions[0].dataset.unit;
+  const upd = () => {
+    $('#newBox').hidden = $('#prod').value !== '__new';
+    $('#qtyL').textContent = T('qtyU', dn(unitNow()));
+    const q = Number($('#qty').value), t = Number($('#total').value);
+    $('#up').textContent = q > 0 && t > 0 ? `${T('unitPrice')}: ${qf(t / q)} ${T('egp')} / ${dn(unitNow())}` : '';
+  };
+  ['prod', 'punit', 'qty', 'total'].forEach(id => $('#' + id).addEventListener('input', upd)); upd();
+  submitWith($('#f'), 'addPurchase', () => {
+    const isNew = $('#prod').value === '__new';
+    const product = isNew ? $('#pname').value.trim() : $('#prod').value;
+    if (!product) throw new Error(T('enterProduct'));
+    const qty = Number($('#qty').value), total = Number($('#total').value);
+    if (!(qty > 0)) throw new Error(T('enterQty'));
+    if (!(total > 0)) throw new Error(T('enterAmount'));
+    const d = { date: $('#date').value, product, qty, total, supplier: $('#supplier').value, desc: $('#desc').value };
+    if (isNew) Object.assign(d, { item: $('#pitem').value, unit: $('#punit').value, nameEn: $('#pen').value.trim() });
+    return d;
+  }, () => { store.del('cfg'); CFG = null; location.hash = '#stock'; });
+}
+
+async function viewIssue() {
+  loading();
+  let cfg, st; try { [cfg, st] = await loadStockAndCfg(); } catch (e) { return errorView(e, viewIssue); }
+  const items = st.items.filter(i => i.balance > 0);
+  if (!items.length) { view().innerHTML = `${bar(T('issue'), '#add')}<div class="wrap"><div class="empty">${T('emptyStock')}</div><a class="btn" href="#buy">${T('buy')}</a></div>`; return; }
+  view().innerHTML = `${bar(T('issue'), '#add')}<div class="wrap"><form id="f" novalidate>
+    <div class="field"><label for="prod">${T('product')}</label><select id="prod">${items.map(p => `<option value="${esc(p.name)}">${esc(dn(p.name))} — ${qf(p.balance)} ${esc(dn(p.unit))}</option>`).join('')}</select></div>
+    <div class="field"><label for="qty" id="qtyL"></label><input id="qty" type="number" inputmode="decimal" min="0" step="any"></div>
+    <p class="hint" id="val"></p>
+    <fieldset><legend>${T('issueFor')}</legend>
+      <div class="seg" data-seg="ctype"><button type="button" data-v="hosha" aria-pressed="true">${T('specificPlot')}</button><button type="button" data-v="shared" aria-pressed="false">${T('sharedArea')}</button></div>
+      <div id="hoshaBox">${hoshaChips(cfg)}</div>
+    </fieldset>
+    <div class="field"><label for="date">${T('date')}</label><input id="date" type="date" value="${today()}"></div>
+    <div class="field"><label for="desc">${T('desc')}</label><input id="desc"></div>
+    <p class="hint">${T('issueHint')}</p>
+    <button class="btn" type="submit">${T('saveIssue')}</button>
+  </form></div>`;
+  const cur = () => items.find(i => i.name === $('#prod').value);
+  const upd = () => {
+    const p = cur(), q = Number($('#qty').value);
+    $('#qtyL').textContent = T('qtyU', dn(p.unit)) + ` · ${T('available')} ${qf(p.balance)}`;
+    $('#val').textContent = q > 0 ? `${T('value')}: ${fmt(q * p.avg)} ${T('egp')} (${qf(p.avg)} × ${qf(q)})` : '';
+  };
+  ['prod', 'qty'].forEach(id => $('#' + id).addEventListener('input', upd)); upd();
+  const f = $('#f');
+  segInit(f, (seg, v) => { if (seg === 'ctype') $('#hoshaBox').hidden = v !== 'hosha'; });
+  submitWith(f, 'addIssue', () => {
+    const p = cur(), qty = Number($('#qty').value);
+    if (!(qty > 0)) throw new Error(T('enterQty'));
+    if (qty > p.balance + 1e-9) throw new Error(T('notEnough', qf(p.balance) + ' ' + dn(p.unit)));
+    return { date: $('#date').value, product: p.name, qty, center: segVal('ctype') === 'shared' ? 'مشترك' : segVal('hosha'), desc: $('#desc').value };
+  }, () => { location.hash = '#stock'; });
 }

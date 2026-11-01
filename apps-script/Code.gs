@@ -20,6 +20,8 @@ const SH = {
   items: 'البنود',
   suppliers: 'الموردين',
   settings: 'الإعدادات',
+  stockMoves: 'حركة المخزن',
+  products: 'الأصناف',
 };
 
 // ===================== قايمة الشيت =====================
@@ -43,7 +45,7 @@ function setAppKey() {
 
 // ===================== التسريع =====================
 // الردود بتتحفظ في الكاش لحد ما حد يسجّل حركة جديدة، فالقراية بتبقى سريعة.
-const READ_KEYS = ['dashboard', 'journal', 'partners', 'all'];
+const READ_KEYS = ['dashboard', 'journal', 'partners', 'all', 'stock'];
 function cache_() { return CacheService.getScriptCache(); }
 function cached_(key, ttl, build) {
   const c = cache_(), hit = c.get(key);
@@ -57,7 +59,7 @@ function clearCache_() {
   cache_().removeAll(READ_KEYS.concat(names, ['config']));
 }
 function getAll_() {
-  return { dashboard: cached_('dashboard', 21600, getDashboard_), journal: cached_('journal', 21600, () => getRecent_(80)), partners: cached_('partners', 21600, getPartners_) };
+  return { dashboard: cached_('dashboard', 21600, getDashboard_), journal: cached_('journal', 21600, () => getRecent_(80)), partners: cached_('partners', 21600, getPartners_), stock: cached_('stock', 21600, getStock_) };
 }
 
 /** أي تعديل بإيدك في الشيت بيمسح الكاش، عشان الأب يعرض الأرقام الجديدة. */
@@ -100,6 +102,7 @@ function handle_(p, data) {
       else if (a === 'journal') result = cached_('journal', 21600, () => getRecent_(80));
       else if (a === 'hosha') result = cached_('hosha_' + p.name, 21600, () => getHosha_(p.name));
       else if (a === 'partners') result = cached_('partners', 21600, getPartners_);
+      else if (a === 'stock') result = cached_('stock', 21600, getStock_);
       else throw new Error('طلب غير معروف');
     } else {
       const lock = LockService.getScriptLock();
@@ -109,6 +112,8 @@ function handle_(p, data) {
         else if (a === 'addMove') result = addMove_(data);
         else if (a === 'addSale') result = addSale_(data);
         else if (a === 'addAsset') result = addAsset_(data);
+        else if (a === 'addPurchase') result = addPurchase_(data);
+        else if (a === 'addIssue') result = addIssue_(data);
         else if (a === 'setYear') result = setYear_(data);
         else throw new Error('طلب غير معروف');
         SpreadsheetApp.flush();
@@ -200,8 +205,10 @@ function getConfig_() {
     partners: st.getRange('B10:C11').getValues().filter(r => r[0] !== '').map(r => ({ name: r[0], share: num_(r[1]) })),
     hoshas: h.filter(r => r[0] !== '').map(r => ({ name: r[0], area: num_(r[1]), crop: r[2], variety: r[3], status: r[5], ratio: num_(r[7]) })),
     items: it.map(r => ({ name: r[0], group: r[1] })),
-    payMethods: col_(st, 'B16:B18'),
-    costCenters: col_(st, 'C16:C25'),
+    payMethods: col_(st, 'B16:B19'),
+    costCenters: col_(st, 'C16:C26'),
+    units: col_(st, 'I16:I30'),
+    products: sh_(SH.products).getRange('A2:C200').getValues().filter(r => r[0] !== '').map(r => ({ name: r[0], item: r[1], unit: r[2] })),
     moveTypes: col_(st, 'D16:D19'),
     saleDest: col_(st, 'E16:E19'),
     years: col_(st, 'G16:G26'),
@@ -217,6 +224,7 @@ function getTranslations_() {
   const add = rows => rows.forEach(r => { if (r[0] !== '' && r[r.length - 1] !== '') tr[String(r[0])] = String(r[r.length - 1]); });
   add(sh_(SH.hosha).getRange('A2:J9').getValues().map(r => [r[0], r[9]]));
   add(sh_(SH.items).getRange('A2:D100').getValues().map(r => [r[0], r[3]]));
+  add(sh_(SH.products).getRange('A2:D200').getValues().map(r => [r[0], r[3]]));
   const st = sh_(SH.settings);
   add(st.getRange(30, 2, st.getMaxRows() - 29, 2).getValues());
   return tr;
@@ -231,7 +239,7 @@ function getDashboard_() {
   const m = v.slice(25, 37).map(r => r.slice(0, 2));
   return {
     year: at(4, 3),
-    kpis: { yearCost: num_(k[0]), totalCost: num_(k[1]), perFeddan: num_(k[2]), cash: num_(k[3]), yearSales: num_(k[4]), assets: num_(k[5]) },
+    kpis: { yearCost: num_(k[0]), totalCost: num_(k[1]), perFeddan: num_(k[2]), cash: num_(k[3]), yearSales: num_(k[4]), assets: num_(k[5]), stock: num_(v[3][6]) },
     partners: p.filter(r => r[0] !== '').map(r => ({ name: r[0], share: num_(r[1]), net: num_(r[2]), balance: num_(r[3]), status: r[4] })),
     settleText: at(13, 2),
     hoshas: h.slice(0, 8).map(r => ({ name: r[0], area: num_(r[1]), status: r[2], crop: r[3], yearCost: num_(r[4]), totalCost: num_(r[5]), perFeddan: num_(r[6]), sales: num_(r[7]), net: num_(r[8]) })),
@@ -329,13 +337,18 @@ function addExpense_(d) {
   requireIn_(d.item, cfg.items.map(x => x.name), 'البند');
   requireIn_(d.center, cfg.costCenters, 'مركز التكلفة');
   requireIn_(d.paidBy, cfg.payMethods, 'طريقة الدفع');
+  return { id: journalRow_(d) };
+}
+
+/** بيكتب قيد في اليومية ويرجّع رقمه. */
+function journalRow_(d) {
   const s = sh_(SH.journal);
   const last = lastDataRow_(s), row = last + 1, id = nextId_(s, last);
   writeCols_(s, row, {
     1: id, 2: parseDate_(d.date), 5: d.item, 7: d.center, 8: amount_(d.amount), 9: d.paidBy,
     10: ensureSupplier_(d.supplier), 11: d.desc || '', 12: d.docNo || '', 13: d.user || '', 14: d.notes || '',
   });
-  return { id };
+  return id;
 }
 
 function addMove_(d) {
@@ -410,4 +423,79 @@ function setYear_(d) {
   if (getConfig_().years.indexOf(y) === -1) throw new Error('السنة مش في القايمة');
   sh_(SH.dash).getRange('C4').setValue(y);
   return { year: y };
+}
+
+
+// ===================== المخزن =====================
+function getStock_() {
+  const p = sh_(SH.products);
+  const items = p.getRange('A2:J200').getValues().filter(r => r[0] !== '').map(r => ({
+    name: r[0], item: r[1], unit: r[2], bought: num_(r[4]), boughtValue: num_(r[5]), issued: num_(r[6]),
+    balance: num_(r[7]), avg: num_(r[8]), value: num_(r[9]),
+  }));
+  const m = sh_(SH.stockMoves), ml = lastDataRow_(m);
+  const moves = [];
+  if (ml >= 2) m.getRange(2, 1, ml - 1, 13).getValues().forEach(r => {
+    if (r[1] === '') return;
+    moves.push({ id: r[0], date: fmtDate_(r[1]), product: r[3], type: r[4], qty: num_(r[5]), price: num_(r[6]), value: num_(r[7]), center: r[8], supplier: r[9], desc: r[10] });
+  });
+  moves.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  return { items, total: items.reduce((t, x) => t + x.value, 0), moves: moves.slice(0, 40) };
+}
+
+function productRow_(name) {
+  const p = sh_(SH.products);
+  const names = p.getRange('A2:A200').getValues().map(r => r[0]);
+  const i = names.indexOf(name);
+  return i === -1 ? null : { row: i + 2, values: p.getRange(i + 2, 1, 1, 10).getValues()[0] };
+}
+
+function stockMove_(d) {
+  const m = sh_(SH.stockMoves);
+  const last = lastDataRow_(m), row = last + 1, id = nextId_(m, last);
+  writeCols_(m, row, {
+    1: id, 2: parseDate_(d.date), 4: d.product, 5: d.type, 6: d.qty, 8: d.value, 9: d.center,
+    10: d.supplier || '', 11: d.desc || '', 12: d.journalId, 13: d.user || '',
+  });
+  return id;
+}
+
+/** شراء للمخزن: الفلوس بتخرج من الخزنة، والصنف بيدخل المخزن (لسه مش تكلفة على حوشة). */
+function addPurchase_(d) {
+  const cfg = cached_('config', 21600, getConfig_);
+  const product = String(d.product || '').trim();
+  if (!product) throw new Error('اكتب اسم الصنف');
+  const qty = amount_(d.qty, 'الكمية'), total = amount_(d.total, 'المبلغ');
+  let p = productRow_(product);
+  if (!p) {
+    requireIn_(d.item, cfg.items.map(x => x.name), 'البند');
+    requireIn_(d.unit, cfg.units, 'الوحدة');
+    const ps = sh_(SH.products);
+    const n = ps.getRange('A2:A200').getValues().filter(r => r[0] !== '').length;
+    writeCols_(ps, n + 2, { 1: product, 2: d.item, 3: d.unit, 4: d.nameEn || '' });
+    p = productRow_(product);
+  }
+  const item = p.values[1], unit = p.values[2];
+  const supplier = ensureSupplier_(d.supplier);
+  const journalId = journalRow_({ date: d.date, item, center: 'مخزن', amount: total, paidBy: 'الخزنة', supplier,
+    desc: 'شراء ' + product + ' ' + qty + ' ' + unit + (d.desc ? ' – ' + d.desc : ''), user: d.user });
+  const id = stockMove_({ date: d.date, product, type: 'شراء', qty, value: total, center: 'مخزن', supplier, desc: d.desc, journalId, user: d.user });
+  return { id, journalId };
+}
+
+/** صرف من المخزن: التكلفة بمتوسط سعر الشراء بتتحمّل على الحوشة (أو المشترك). */
+function addIssue_(d) {
+  const cfg = cached_('config', 21600, getConfig_);
+  requireIn_(d.center, cfg.costCenters.filter(c => c !== 'أصل ثابت' && c !== 'مخزن'), 'الحوشة');
+  const p = productRow_(d.product);
+  if (!p) throw new Error('الصنف مش موجود في المخزن');
+  const qty = amount_(d.qty, 'الكمية');
+  const balance = num_(p.values[7]), avg = num_(p.values[8]), item = p.values[1], unit = p.values[2];
+  if (qty > balance + 1e-9) throw new Error('الرصيد مش كفاية. الموجود ' + balance + ' ' + unit);
+  const value = Math.round(qty * avg * 100) / 100;
+  if (value <= 0) throw new Error('الصنف ملوش سعر شراء مسجّل');
+  const journalId = journalRow_({ date: d.date, item, center: d.center, amount: value, paidBy: 'المخزن',
+    desc: 'صرف ' + d.product + ' ' + qty + ' ' + unit + (d.desc ? ' – ' + d.desc : ''), user: d.user });
+  const id = stockMove_({ date: d.date, product: d.product, type: 'صرف', qty, value, center: d.center, desc: d.desc, journalId, user: d.user });
+  return { id, journalId, value };
 }
