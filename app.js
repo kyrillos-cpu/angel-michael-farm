@@ -81,10 +81,11 @@ function markStale() { ['dash', 'journal', 'partners'].forEach(k => { const v = 
 
 async function showCached(cacheKey, fetcher, render, retry) {
   const key = 'v_' + cacheKey, here = location.hash;
-  const old = store.get(key, null);
+  const raw = store.get(key, null);
+  const old = raw && raw.d !== undefined ? raw : null; // بيتجاهل الكاش بتاع النسخة القديمة
   const sync = $('#sync');
-  if (old && old.d !== undefined) render(old.d); else loading();
-  if (old && old.d !== undefined && Date.now() - old.t < FRESH_MS) return;
+  if (old) render(old.d); else loading();
+  if (old && Date.now() - old.t < FRESH_MS) return;
   sync.hidden = false;
   try {
     const fresh = await fetcher();
@@ -92,14 +93,20 @@ async function showCached(cacheKey, fetcher, render, retry) {
     if (location.hash === here) render(fresh);
   } catch (e) {
     if (!old) errorView(e, retry);
-    else toast('مش قادر يحدّث دلوقتي. دي آخر بيانات اتحفظت.', true);
+    else toast('مش قادر يحدّث دلوقتي: ' + e.message, true);
   } finally { sync.hidden = true; }
 }
 
 // طلب واحد بيجيب الرئيسية والسجل والشركاء مرة واحدة
 async function fetchAll() {
   await loadConfig();
-  const all = await api.get('all');
+  let all;
+  try { all = await api.get('all'); }
+  catch (e) {
+    // لو السكريبت لسه على النسخة القديمة اللي مفيهاش 'all'
+    if (!/غير معروف/.test(e.message)) throw e;
+    return api.get('dashboard');
+  }
   putView('journal', all.journal); putView('partners', all.partners);
   return all.dashboard;
 }
