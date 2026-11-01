@@ -46,7 +46,7 @@ function setAppKey() {
 
 // ===================== التسريع =====================
 // الردود بتتحفظ في الكاش لحد ما حد يسجّل حركة جديدة، فالقراية بتبقى سريعة.
-const READ_KEYS = ['dashboard', 'journal', 'partners', 'all', 'stock'];
+const READ_KEYS = ['dashboard', 'journal', 'partners', 'all', 'stock', 'assets'];
 function cache_() { return CacheService.getScriptCache(); }
 function cached_(key, ttl, build) {
   const c = cache_(), hit = c.get(key);
@@ -60,7 +60,7 @@ function clearCache_() {
   cache_().removeAll(READ_KEYS.concat(names, ['config']));
 }
 function getAll_() {
-  return { dashboard: cached_('dashboard', 21600, getDashboard_), journal: cached_('journal', 21600, () => getRecent_(80)), partners: cached_('partners', 21600, getPartners_), stock: cached_('stock', 21600, getStock_) };
+  return { dashboard: cached_('dashboard', 21600, getDashboard_), journal: cached_('journal', 21600, () => getRecent_(0)), partners: cached_('partners', 21600, getPartners_), stock: cached_('stock', 21600, getStock_) };
 }
 
 /** أي تعديل بإيدك في الشيت بيمسح الكاش، عشان الأب يعرض الأرقام الجديدة. */
@@ -106,10 +106,11 @@ function handle_(p, data) {
       else if (a === 'config') result = cached_('config', 21600, getConfig_);
       else if (a === 'all') result = getAll_();
       else if (a === 'dashboard') result = cached_('dashboard', 21600, getDashboard_);
-      else if (a === 'journal') result = cached_('journal', 21600, () => getRecent_(80));
+      else if (a === 'journal') result = cached_('journal', 21600, () => getRecent_(0));
       else if (a === 'hosha') result = cached_('hosha_' + p.name, 21600, () => getHosha_(p.name));
       else if (a === 'partners') result = cached_('partners', 21600, getPartners_);
       else if (a === 'stock') result = cached_('stock', 21600, getStock_);
+      else if (a === 'assets') result = cached_('assets', 21600, getAssets_);
       else throw new Error('طلب غير معروف');
     } else {
       const lock = LockService.getScriptLock();
@@ -268,25 +269,52 @@ function getPartners_() {
   };
 }
 
+/** كل حركة فلوس في المزرعة، بأثرها على الخزنة والرصيد بعدها. */
 function getRecent_(limit) {
   const items = [];
   const j = sh_(SH.journal), jl = lastDataRow_(j);
   if (jl >= 2) j.getRange(2, 1, jl - 1, 14).getValues().forEach(r => {
     if (r[1] === '') return;
-    items.push({ kind: 'expense', id: r[0], date: fmtDate_(r[1]), title: r[4], group: r[5], center: r[6], amount: num_(r[7]), by: r[8], supplier: r[9], desc: r[10] });
+    const amt = num_(r[7]);
+    const sub = r[6] === 'أصل ثابت' ? 'asset' : (r[6] === 'مخزن' || r[8] === 'المخزن') ? 'store' : 'expense';
+    items.push({ kind: 'expense', sub, id: r[0], date: fmtDate_(r[1]), title: r[4], group: r[5], center: r[6], amount: amt, by: r[8], supplier: r[9], desc: r[10], note: r[13], cash: r[8] === 'الخزنة' ? -amt : 0 });
   });
   const m = sh_(SH.moves), ml = lastDataRow_(m);
   if (ml >= 2) m.getRange(2, 1, ml - 1, 8).getValues().forEach(r => {
     if (r[1] === '') return;
-    items.push({ kind: 'move', id: r[0], date: fmtDate_(r[1]), title: r[4], partner: r[3], amount: num_(r[5]), desc: r[7] });
+    const amt = num_(r[5]);
+    items.push({ kind: 'move', id: r[0], date: fmtDate_(r[1]), title: r[4], partner: r[3], amount: amt, desc: r[7], cash: r[4] === 'توريد للخزنة' ? amt : r[4] === 'سحب من الخزنة' ? -amt : 0 });
   });
   const s = sh_(SH.sales), sl = lastDataRow_(s);
   if (sl >= 2) s.getRange(2, 1, sl - 1, 12).getValues().forEach(r => {
     if (r[1] === '') return;
-    items.push({ kind: 'sale', id: r[0], date: fmtDate_(r[1]), title: 'بيع ' + (r[5] || 'محصول'), center: r[4], buyer: r[6], amount: num_(r[9]), dest: r[10] });
+    const amt = num_(r[9]);
+    items.push({ kind: 'sale', id: r[0], date: fmtDate_(r[1]), title: 'بيع ' + (r[5] || 'محصول'), center: r[4], buyer: r[6], amount: amt, dest: r[10], desc: r[11], cash: r[10] === 'الخزنة' ? amt : 0 });
   });
-  items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  return items.slice(0, limit);
+  // الرصيد بعد كل حركة: الداخل قبل الخارج في نفس اليوم
+  items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : b.cash - a.cash));
+  let bal = 0;
+  items.forEach(i => { bal += i.cash; i.balance = Math.round(bal * 100) / 100; });
+  items.reverse();
+  return limit ? items.slice(0, limit) : items;
+}
+
+/** الأصول وكل مصروف اتصرف على كل أصل. */
+function getAssets_() {
+  const a = sh_(SH.assets);
+  const rows = a.getRange('A2:L300').getValues().filter(r => r[1] !== '');
+  const j = sh_(SH.journal), jl = lastDataRow_(j);
+  const lines = jl >= 2 ? j.getRange(2, 1, jl - 1, 14).getValues().filter(r => r[1] !== '' && r[6] === 'أصل ثابت') : [];
+  const items = rows.map(r => {
+    const name = String(r[1]);
+    const ls = lines.filter(l => String(l[13]) === 'أصل: ' + name || (!l[13] && String(l[10]) === name))
+      .map(l => ({ date: fmtDate_(l[1]), desc: l[10], amount: num_(l[7]), supplier: l[9] }))
+      .sort((x, y) => (x.date < y.date ? 1 : -1));
+    return { code: r[0], name, start: fmtDate_(r[2]), cost: num_(r[3]), life: num_(r[4]), center: r[5], monthly: num_(r[6]),
+      depreciated: num_(r[9]), book: num_(r[10]), notes: r[11], lines: ls };
+  });
+  const sum = k => items.reduce((t, x) => t + x[k], 0);
+  return { items, cost: sum('cost'), depreciated: sum('depreciated'), book: sum('book'), monthly: sum('monthly') };
 }
 
 function getHosha_(name) {
@@ -420,7 +448,7 @@ function addAsset_(d) {
   if (d.paidBy) {
     const assetItem = cfg.items.find(x => x.group === 'أصول');
     if (!assetItem) throw new Error('مفيش بند في مجموعة "أصول" في تاب البنود');
-    journalId = addExpense_({ date: d.date, item: assetItem.name, center: 'أصل ثابت', amount: cost, paidBy: d.paidBy, supplier: d.supplier, desc: d.name, user: d.user }).id;
+    journalId = addExpense_({ date: d.date, item: assetItem.name, center: 'أصل ثابت', amount: cost, paidBy: d.paidBy, supplier: d.supplier, desc: d.name, notes: 'أصل: ' + d.name, user: d.user }).id;
   }
   return { code, journalId };
 }

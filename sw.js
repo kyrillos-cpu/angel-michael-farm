@@ -1,6 +1,6 @@
 // بيخلّي الأب يتثبّت كأبلكيشن ويفتح لو النت ضعيف.
 // بيجيب الملفات من النت الأول (عشان أي تعديل يظهر على طول)، ولو النت مش موجود بيستخدم النسخة المحفوظة.
-const CACHE = 'amf-v11';
+const CACHE = 'amf-v12';
 const SHELL = ['./', 'index.html', 'app.js', 'style.css', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

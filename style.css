@@ -121,3 +121,9 @@ legend { padding: 0; margin-bottom: 8px; }
 .menu-grid a.wide { grid-column: 1 / -1; min-height: 0; }
 .btn.sm { height: 44px; font-size: 14px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
 .btn.out { background: var(--neg); }
+
+.kpi.link { text-decoration: none; color: inherit; }
+.kpi .sm { font-size: 12px; }
+.chips.scroll { display: flex; height: 44px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.chips.scroll::-webkit-scrollbar { display: none; }
+.chips.scroll button { flex: 0 0 auto; padding: 0 14px; }

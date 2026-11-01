@@ -67,6 +67,11 @@ const STR = {
     issueHint: 'الصرف مش بيخصم من الخزنة (اتدفع وقت الشراء). قيمته = الكمية × متوسط سعر الشراء، وبتتحمّل على الحوشة.',
     noStock: 'المخزن فاضي. ابدأ بـ"شراء للمخزن".', stockMoves: 'آخر حركات المخزن', bought: 'شراء', issued: 'صرف', value: 'القيمة',
     issueFor: 'الصرف على', emptyStock: 'مفيش رصيد في المخزن', needDeploy: 'المخزن محتاج تحديث كود السكريبت في الشيت (Deploy نسخة جديدة).',
+    assets: 'الأصول', assetsValue: 'قيمة الأصول', assetCost: 'التكلفة', assetDep: 'اتهلك لحد النهارده', assetBook: 'القيمة الحالية',
+    perMonth: 'في الشهر', years: n => `${n} سنة`, noDep: 'بدون إهلاك', inService: 'التشغيل', spentOn: 'اللي اتصرف عليه',
+    assetsHint: 'الأصل بيتحمّل على الحوش على شكل إهلاك شهري طول عمره، مش مرة واحدة.', noAssets: 'لسه مفيش أصول',
+    ledger: 'حركة الفلوس', allF: 'الكل', inF: 'داخل', outF: 'خارج', assetsF: 'أصول', expF: 'مصروفات', storeF: 'مخزن', salesF: 'بيع',
+    totalIn: 'دخل الخزنة', totalOut: 'خرج من الخزنة', balAfter: 'الرصيد', allYears: 'كل السنين', count: n => `${n} حركة`, noCash: 'من غير خزنة',
     settleSentence: (payer, recv, a, b) => `${payer} يدفع ${a} ج.م لـ${recv} مباشرة، أو يورّد ${b} ج.م للخزنة، عشان الاتنين يتساووا`,
   },
   en: {
@@ -125,6 +130,11 @@ const STR = {
     issueHint: 'An issue does not touch the cash box (paid at purchase). Its value = qty × average purchase price, charged to the plot.',
     noStock: 'The store is empty. Start with "Buy for store".', stockMoves: 'Recent store entries', bought: 'Purchase', issued: 'Issue', value: 'Value',
     issueFor: 'Issue to', emptyStock: 'No stock available', needDeploy: 'The store needs the updated script code (Deploy a new version).',
+    assets: 'Assets', assetsValue: 'Assets value', assetCost: 'Cost', assetDep: 'Depreciated to date', assetBook: 'Current value',
+    perMonth: 'per month', years: n => `${n} years`, noDep: 'Not depreciated', inService: 'In service', spentOn: 'Spent on it',
+    assetsHint: 'An asset is charged to the plots as monthly depreciation over its life, not all at once.', noAssets: 'No assets yet',
+    ledger: 'Money flow', allF: 'All', inF: 'In', outF: 'Out', assetsF: 'Assets', expF: 'Expenses', storeF: 'Store', salesF: 'Sales',
+    totalIn: 'Into cash box', totalOut: 'Out of cash box', balAfter: 'Balance', allYears: 'All years', count: n => `${n} entries`, noCash: 'no cash',
     settleSentence: (payer, recv, a, b) => `${payer} pays ${a} EGP directly to ${recv}, or deposits ${b} EGP to the cash box, to even out.`,
   },
 };
@@ -233,7 +243,7 @@ function errorView(e, retry) {
 // بيعرض آخر بيانات محفوظة فوراً، وبعدين بيحدّثها من الشيت في الخلفية.
 const FRESH_MS = 60 * 1000; // لو البيانات أحدث من دقيقة مش بنطلبها تاني
 function putView(key, d) { store.set('v_' + key, { t: Date.now(), d }); }
-function markStale() { ['dash', 'journal', 'partners', 'stock'].forEach(k => { const v = store.get('v_' + k, null); if (v) { v.t = 0; store.set('v_' + k, v); } }); }
+function markStale() { ['dash', 'journal', 'partners', 'stock', 'assets'].forEach(k => { const v = store.get('v_' + k, null); if (v) { v.t = 0; store.set('v_' + k, v); } }); }
 
 async function showCached(cacheKey, fetcher, render, retry) {
   const key = 'v_' + cacheKey, here = location.hash;
@@ -270,7 +280,7 @@ async function fetchAll() {
 const routes = {
   home: viewHome, hoshas: viewHoshas, hosha: viewHosha, add: viewAdd, expense: viewExpense, sale: viewSale,
   move: viewMove, asset: viewAsset, journal: viewJournal, partners: viewPartners, settings: viewSettings,
-  stock: viewStock, buy: viewBuy, issue: viewIssue,
+  stock: viewStock, buy: viewBuy, issue: viewIssue, assets: viewAssets, assetinfo: viewAssetInfo,
 };
 
 function route() {
@@ -343,7 +353,7 @@ function viewSettings() {
   $('#setForm').onsubmit = saveSettings;
   $('#install2').onclick = doInstall;
   $('#reloadCfg').onclick = async () => { try { await loadConfig(true); toast(T('listsUpdated')); } catch (e) { toast(e.message, true); } };
-  $('#logout').onclick = () => { ['api', 'key', 'cfg', 'v_dash', 'v_journal', 'v_partners', 'v_stock'].forEach(store.del); CFG = null; location.hash = ''; route(); };
+  $('#logout').onclick = () => { ['api', 'key', 'cfg', 'v_dash', 'v_journal', 'v_partners', 'v_stock', 'v_assets'].forEach(store.del); CFG = null; location.hash = ''; route(); };
 }
 
 // ===================== الرئيسية =====================
@@ -376,7 +386,10 @@ function renderHome(d) {
       <div class="kpi"><span class="muted">${T('cash')}</span><span class="v ${d.kpis.cash < 0 ? 'neg' : ''}">${fmt(d.kpis.cash)}</span></div>
       <div class="kpi"><span class="muted">${T('yearSales')}</span><span class="v">${fmt(d.kpis.yearSales)}</span></div>
     </div>
-    <a class="card row" href="#stock" style="text-decoration:none;color:inherit"><span><span class="muted">${T('stockValue')}</span><br><b style="font-size:18px">${fmt(d.kpis.stock || 0)}</b> <small class="muted">${T('egp')}</small></span><span class="muted">${T('details')} ›</span></a>
+    <div class="grid2">
+      <a class="kpi link" href="#assets"><span class="muted">${T('assetsValue')}</span><span class="v">${fmt(d.kpis.assets || 0)}</span><span class="muted sm">${T('details')} ›</span></a>
+      <a class="kpi link" href="#stock"><span class="muted">${T('stockValue')}</span><span class="v">${fmt(d.kpis.stock || 0)}</span><span class="muted sm">${T('details')} ›</span></a>
+    </div>
     <section class="card">
       <div class="row"><h2>${T('partnerBalance')}</h2><a href="#partners">${T('details')}</a></div>
       ${d.partners.map(partnerPill).join('')}
@@ -617,17 +630,41 @@ async function viewAsset() {
 
 // ===================== السجل والشركاء =====================
 function viewJournal() { showCached('journal', () => api.get('journal'), renderJournal, viewJournal); }
+let JF = { f: 'all', y: 'all' };
 function renderJournal(items) {
-  const label = { expense: T('kExpense'), move: T('kMove'), sale: T('kSale') };
-  const title = i => i.kind === 'sale' ? `${T('saleOf')} ${String(i.title || '').replace(/^بيع\s*/, '') || T('cropDefault')}` : dn(i.title);
-  const sub = i => i.kind === 'expense' ? `${esc(dn(i.center))} · ${esc(dn(i.by))}${i.supplier ? ' · ' + esc(i.supplier) : ''}`
+  const label = { expense: T('kExpense'), move: T('kMove'), sale: T('kSale'), asset: T('assetsF'), store: T('storeF') };
+  const isA = i => i.sub === 'asset' && i.desc;
+  const title = i => i.kind === 'sale' ? `${T('saleOf')} ${String(i.title || '').replace(/^بيع\s*/, '') || T('cropDefault')}` : isA(i) ? i.desc : dn(i.title);
+  const sub = i => isA(i) ? esc(String(i.note || '').replace(/^أصل:\s*/, '')) : i.kind === 'expense' ? `${esc(dn(i.center))}${i.supplier ? ' · ' + esc(i.supplier) : ''}`
     : i.kind === 'move' ? esc(pn(i.partner)) : `${esc(dn(i.center))} · ${esc(dn(i.dest))}${i.buyer ? ' · ' + esc(i.buyer) : ''}`;
-  view().innerHTML = `${bar(T('journal'), '', `<a class="icon-btn" href="#journal" onclick="markStale();route();return false" aria-label="${T('refresh')}">${ICON.refresh}</a>`)}
-  <div class="wrap"><div class="list">${items.length ? items.map(i => `<div class="item"><div>
-    <div class="t">${esc(title(i))}<span class="tag">${label[i.kind]}</span></div>
-    <div class="s">${esc(i.date)} · ${sub(i)}${i.desc ? ' · ' + esc(i.desc) : ''}</div></div>
-    <span class="a ${i.kind === 'sale' ? 'pos' : ''}">${fmt(i.amount)}</span></div>`).join('') : `<div class="empty">${T('noEntries')}</div>`}</div>
+  const has = items.length && items[0].cash !== undefined;
+  const cashOf = i => has ? i.cash : (i.kind === 'expense' ? -i.amount : i.amount);
+  const years = [...new Set(items.map(i => String(i.date).slice(0, 4)))].sort().reverse();
+  const filters = [['all', 'allF'], ['in', 'inF'], ['out', 'outF'], ['asset', 'assetsF'], ['expense', 'expF'], ['store', 'storeF'], ['sale', 'salesF']];
+  const match = i => {
+    if (JF.y !== 'all' && String(i.date).slice(0, 4) !== JF.y) return false;
+    const k = i.kind === 'expense' ? (i.sub || 'expense') : i.kind;
+    return JF.f === 'all' || (JF.f === 'in' && cashOf(i) > 0) || (JF.f === 'out' && cashOf(i) < 0) || JF.f === k;
+  };
+  const list = items.filter(match);
+  const tin = list.reduce((t, i) => t + Math.max(0, cashOf(i)), 0), tout = list.reduce((t, i) => t + Math.max(0, -cashOf(i)), 0);
+  const chip = (grp, v, txt, on) => `<button type="button" data-g="${grp}" data-v="${v}" aria-pressed="${on}">${esc(txt)}</button>`;
+  view().innerHTML = `${bar(T('ledger'), '', `<a class="icon-btn" href="#journal" onclick="markStale();route();return false" aria-label="${T('refresh')}">${ICON.refresh}</a>`)}
+  <div class="wrap">
+    <div class="chips scroll" id="fy">${chip('y', 'all', T('allYears'), JF.y === 'all')}${years.map(y => chip('y', y, y, JF.y === y)).join('')}</div>
+    <div class="chips scroll" id="ff">${filters.map(([v, k]) => chip('f', v, T(k), JF.f === v)).join('')}</div>
+    <div class="grid2">
+      <div class="kpi"><span class="muted">${T('totalIn')}</span><span class="v pos">${fmt(tin)}</span></div>
+      <div class="kpi"><span class="muted">${T('totalOut')}</span><span class="v neg">${fmt(tout)}</span></div>
+    </div>
+    <span class="muted">${T('count', list.length)}</span>
+    <div class="list">${list.length ? list.map(i => { const c = cashOf(i); const k = i.kind === 'expense' ? (i.sub || 'expense') : i.kind; return `<div class="item"><div>
+    <div class="t">${esc(title(i))}<span class="tag">${label[k]}</span></div>
+    <div class="s">${esc(i.date)} · ${sub(i)}${i.desc && !isA(i) ? ' · ' + esc(i.desc) : ''}</div></div>
+    <div style="text-align:end;white-space:nowrap"><span class="a ${c > 0 ? 'pos' : c < 0 ? 'neg' : ''}">${c > 0 ? '+' : c < 0 ? '−' : ''}${fmt(i.amount)}</span>
+    <div class="s">${c === 0 ? T('noCash') : i.balance !== undefined ? T('balAfter') + ' ' + fmt(i.balance) : ''}</div></div></div>`; }).join('') : `<div class="empty">${T('noEntries')}</div>`}</div>
   <p class="hint">${T('editInSheet')}</p></div>`;
+  view().querySelectorAll('[data-g]').forEach(b => b.onclick = () => { JF[b.dataset.g] = b.dataset.v; renderJournal(items); });
 }
 
 function viewPartners() { showCached('partners', () => api.get('partners'), renderPartners, viewPartners); }
@@ -751,4 +788,40 @@ async function viewIssue() {
     if (qty > p.balance + 1e-9) throw new Error(T('notEnough', qf(p.balance) + ' ' + dn(p.unit)));
     return { date: $('#date').value, product: p.name, qty, center: segVal('ctype') === 'shared' ? 'مشترك' : segVal('hosha'), desc: $('#desc').value };
   }, () => { location.hash = '#stock'; });
+}
+
+// ===================== الأصول =====================
+function viewAssets() { showCached('assets', async () => { await loadConfig(); try { return await api.get('assets'); } catch (e) { if (/غير معروف/.test(e.message)) throw new Error(T('needDeploy')); throw e; } }, renderAssets, viewAssets); }
+function renderAssets(d) {
+  view().innerHTML = `${bar(T('assets'), '#home')}<div class="wrap">
+    <section class="card"><span class="muted">${T('assetBook')}</span><span class="big">${fmt(d.book)} <small style="font-size:15px">${T('egp')}</small></span>
+      <div class="row"><span class="muted">${T('assetCost')}</span><b>${fmt(d.cost)}</b></div>
+      <div class="row"><span class="muted">${T('assetDep')}</span><b>${fmt(d.depreciated)}</b></div>
+      <div class="row"><span class="muted">${T('perMonth')}</span><b>${fmt(d.monthly)}</b></div></section>
+    ${d.items.length ? `<div class="list">${d.items.map(x => `<a class="item" href="#assetinfo/${enc(x.name)}" style="text-decoration:none;color:inherit"><div>
+      <div class="t">${esc(dn(x.name))}</div>
+      <div class="s">${x.life ? T('years', x.life) + ' · ' + fmt(x.monthly) + ' ' + T('perMonth') : T('noDep')} · ${T('assetCost')} ${fmt(x.cost)}</div>
+      <div class="meter" style="margin-top:6px"><i style="width:${x.cost ? Math.round(x.depreciated / x.cost * 100) : 0}%"></i></div></div>
+      <div style="text-align:end"><b>${fmt(x.book)}</b><div class="s">${T('assetBook')}</div></div></a>`).join('')}</div>` : `<div class="empty">${T('noAssets')}</div>`}
+    <p class="hint">${T('assetsHint')}</p></div>`;
+}
+function viewAssetInfo(name) {
+  const c = store.get('v_assets', null);
+  const show = d => { const x = d.items.find(i => i.name === name); if (!x) { location.hash = '#assets'; return; } renderAssetInfo(x); };
+  if (c && c.d) return show(c.d);
+  showCached('assets', () => api.get('assets'), show, () => viewAssetInfo(name));
+}
+function renderAssetInfo(x) {
+  view().innerHTML = `${bar(dn(x.name), '#assets')}<div class="wrap">
+    <section class="card">
+      <div class="row"><span class="muted">${T('assetCost')}</span><b>${fmt(x.cost)}</b></div>
+      <div class="row"><span class="muted">${T('inService')}</span><b>${esc(x.start)}</b></div>
+      <div class="row"><span class="muted">${T('life')}</span><b>${x.life ? T('years', x.life) : T('noDep')}</b></div>
+      <div class="row"><span class="muted">${T('perMonth')}</span><b>${fmt(x.monthly)}</b></div>
+      <div class="row"><span class="muted">${T('assetDep')}</span><b>${fmt(x.depreciated)}</b></div>
+      <div class="row"><span class="muted">${T('assetBook')}</span><b>${fmt(x.book)}</b></div>
+    </section>
+    <section class="list"><h2 style="font-size:15px">${T('spentOn')} (${x.lines.length})</h2>
+      ${x.lines.length ? x.lines.map(l => `<div class="item"><div><div class="t">${esc(l.desc)}</div><div class="s">${esc(l.date)}${l.supplier ? ' · ' + esc(l.supplier) : ''}</div></div><span class="a">${fmt(l.amount)}</span></div>`).join('') : `<div class="empty">${T('noMoves')}</div>`}
+    </section></div>`;
 }
