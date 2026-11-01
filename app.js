@@ -70,6 +70,7 @@ const STR = {
     assets: 'الأصول', assetsValue: 'قيمة الأصول', assetCost: 'التكلفة', assetDep: 'اتهلك لحد النهارده', assetBook: 'القيمة الحالية',
     perMonth: 'في الشهر', years: n => `${n} سنة`, noDep: 'بدون إهلاك', inService: 'التشغيل', spentOn: 'اللي اتصرف عليه',
     assetsHint: 'الأصل بيتحمّل على الحوش على شكل إهلاك شهري طول عمره، مش مرة واحدة.', noAssets: 'لسه مفيش أصول',
+    cDep: 'توريد الشركاء', cSales: 'المبيعات', cOut: 'المصروفات والأصول', cWd: 'سحب الشركاء',
     ledger: 'حركة الفلوس', allF: 'الكل', inF: 'داخل', outF: 'خارج', assetsF: 'أصول', expF: 'مصروفات', storeF: 'مخزن', salesF: 'بيع',
     totalIn: 'دخل الخزنة', totalOut: 'خرج من الخزنة', balAfter: 'الرصيد', allYears: 'كل السنين', count: n => `${n} حركة`, noCash: 'من غير خزنة',
     settleSentence: (payer, recv, a, b) => `${payer} يدفع ${a} ج.م لـ${recv} مباشرة، أو يورّد ${b} ج.م للخزنة، عشان الاتنين يتساووا`,
@@ -133,6 +134,7 @@ const STR = {
     assets: 'Assets', assetsValue: 'Assets value', assetCost: 'Cost', assetDep: 'Depreciated to date', assetBook: 'Current value',
     perMonth: 'per month', years: n => `${n} years`, noDep: 'Not depreciated', inService: 'In service', spentOn: 'Spent on it',
     assetsHint: 'An asset is charged to the plots as monthly depreciation over its life, not all at once.', noAssets: 'No assets yet',
+    cDep: 'Partner deposits', cSales: 'Sales', cOut: 'Expenses & assets', cWd: 'Partner withdrawals',
     ledger: 'Money flow', allF: 'All', inF: 'In', outF: 'Out', assetsF: 'Assets', expF: 'Expenses', storeF: 'Store', salesF: 'Sales',
     totalIn: 'Into cash box', totalOut: 'Out of cash box', balAfter: 'Balance', allYears: 'All years', count: n => `${n} entries`, noCash: 'no cash',
     settleSentence: (payer, recv, a, b) => `${payer} pays ${a} EGP directly to ${recv}, or deposits ${b} EGP to the cash box, to even out.`,
@@ -381,11 +383,9 @@ function renderHome(d) {
       <span class="muted">${T('yearCost', esc(d.year))}</span>
       <span class="big">${fmt(d.kpis.yearCost)} <small style="font-size:15px">${T('egp')}</small></span>
       <span class="muted">${T('sinceStart')} ${fmt(d.kpis.totalCost)} · ${T('perFeddanShort')} ${fmt(d.kpis.perFeddan)}</span>
+      <span class="muted">${T('yearSales')} <b class="pos">${fmt(d.kpis.yearSales)}</b></span>
     </section>
-    <div class="grid2">
-      <div class="kpi"><span class="muted">${T('cash')}</span><span class="v ${d.kpis.cash < 0 ? 'neg' : ''}">${fmt(d.kpis.cash)}</span></div>
-      <div class="kpi"><span class="muted">${T('yearSales')}</span><span class="v">${fmt(d.kpis.yearSales)}</span></div>
-    </div>
+    ${cashCard(d)}
     <div class="grid2">
       <a class="kpi link" href="#assets"><span class="muted">${T('assetsValue')}</span><span class="v">${fmt(d.kpis.assets || 0)}</span><span class="muted sm">${T('details')} ›</span></a>
       <a class="kpi link" href="#stock"><span class="muted">${T('stockValue')}</span><span class="v">${fmt(d.kpis.stock || 0)}</span><span class="muted sm">${T('details')} ›</span></a>
@@ -410,6 +410,20 @@ function renderHome(d) {
     try { await api.post('setYear', { year: Number(ev.target.value) }); markStale(); } catch (e) { toast(e.message, true); }
     viewHome();
   };
+}
+
+// الخزنة = توريد الشركاء + المبيعات − المصروفات − السحب (من حركة الفلوس)
+function cashCard(d) {
+  const j = (store.get('v_journal', null) || {}).d;
+  let dep = 0, sal = 0, out = 0, wd = 0;
+  const ok = Array.isArray(j) && j.length && j[0].cash !== undefined;
+  if (ok) j.forEach(i => { if (i.kind === 'move') { if (i.cash > 0) dep += i.cash; else wd -= i.cash; } else if (i.kind === 'sale') sal += i.cash; else out -= i.cash; });
+  const row = (k, v, cls, sign) => `<div class="row"><span class="muted">${T(k)}</span><b class="${cls}">${sign}${fmt(v)}</b></div>`;
+  return `<a class="card" href="#journal" style="text-decoration:none;color:inherit">
+    <div class="row"><span class="muted">${T('cash')}</span><span class="muted sm">${T('details')} ›</span></div>
+    <span class="big ${d.kpis.cash < 0 ? 'neg' : ''}">${fmt(d.kpis.cash)} <small style="font-size:15px">${T('egp')}</small></span>
+    ${ok ? row('cDep', dep, 'pos', '+') + row('cSales', sal, 'pos', '+') + row('cOut', out, 'neg', '−') + (wd > 0.5 ? row('cWd', wd, 'neg', '−') : '') : ''}
+  </a>`;
 }
 
 function hoshaCard(h) {
