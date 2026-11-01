@@ -32,7 +32,7 @@ const STR = {
     costPerFeddan: 'تكلفة الفدان', byItem: 'التكلفة حسب البند', noCosts: 'لسه مفيش مصروفات على الحوشة دي', recent: 'آخر الحركات',
     sharedTag: 'نصيب من مشترك', noMoves: 'مفيش حركات',
     newTitle: 'تسجيل جديد', expense: 'مصروف', expenseSub: 'على حوشة أو مشترك، وبيتخصم من الخزنة',
-    move: 'حركة شريك', moveSub: 'توريد للخزنة، سحب، أو تسوية بين الشريكين', sale: 'بيع محصول', saleSub: 'والفلوس راحت الخزنة ولا اتوزعت',
+    move: 'حركة شريك', moveSub: 'توريد للخزنة، سحب، أو تسوية بين الشريكين', sale: 'بيع محصول', saleSub: 'على حوشة، وفلوسها بتدخل الخزنة',
     asset: 'أصل ثابت', assetSub: 'بير، طلمبة، سور، ماشيات… بيتهلك على الحوش',
     saving: 'بيحفظ…', saved: 'اتسجّل بنجاح', fromCash: 'من الخزنة', paidOwn: p => `${p} دفع من جيبه`, alreadyRecorded: 'اتسجل في المصروفات قبل كده',
     addExpense: 'تسجيل مصروف', date: 'التاريخ', amount: 'المبلغ (ج.م)', item: 'البند', chargeTo: 'يتحمّل على', specificPlot: 'حوشة محددة',
@@ -42,6 +42,7 @@ const STR = {
     partner: 'الشريك', moveType: 'نوع الحركة', depositTxt: 'توريد فلوس للخزنة', withdrawTxt: 'سحب فلوس من الخزنة',
     settleTxt: 'دفع للشريك التاني مباشرة (تسوية)', descPh2: 'مثال: تحويل بنكي',
     settleHint: 'التسوية بتتسجل على الاتنين مرة واحدة: على اللي دفع كمدفوعة، وعلى التاني كمستلمة.', saveMove: 'حفظ الحركة',
+    hSales: 'المبيعات', hNet: 'الصافي', saleToCash: 'فلوس البيعة بتدخل الخزنة. التقسيم على الشريكين بيتعمل بعد كده من "حركة شريك ← سحب من الخزنة".',
     plot: 'الحوشة', cropName: 'المحصول', buyer: 'التاجر', qty: 'الكمية (كجم)', price: 'السعر (ج/كجم)', saleTotal: 'إجمالي البيعة',
     whereMoney: 'الفلوس راحت فين؟', toCash: 'دخلت خزنة المزرعة', toSplit: 'اتوزعت على الشريكين حسب النسبة',
     toPartner: p => `استلمها ${p} كلها`, toMixed: 'جزء للخزنة والباقي اتوزع', toBoxAmt: 'المبلغ اللي دخل الخزنة',
@@ -79,7 +80,7 @@ const STR = {
     costPerFeddan: 'Cost per feddan', byItem: 'Cost by item', noCosts: 'No expenses on this plot yet', recent: 'Recent entries',
     sharedTag: 'shared portion', noMoves: 'No entries',
     newTitle: 'New entry', expense: 'Expense', expenseSub: 'On a plot or shared, paid from the cash box',
-    move: 'Partner entry', moveSub: 'Deposit, withdrawal, or settlement between partners', sale: 'Crop sale', saleSub: 'Into the cash box or split',
+    move: 'Partner entry', moveSub: 'Deposit, withdrawal, or settlement between partners', sale: 'Crop sale', saleSub: 'From a plot, into the cash box',
     asset: 'Fixed asset', assetSub: 'Well, pump, fence, roads… depreciated across plots',
     saving: 'Saving…', saved: 'Saved', fromCash: 'From the cash box', paidOwn: p => `${p} paid personally`, alreadyRecorded: 'Already recorded as an expense',
     addExpense: 'New expense', date: 'Date', amount: 'Amount (EGP)', item: 'Item', chargeTo: 'Charge to', specificPlot: 'Specific plot',
@@ -89,6 +90,7 @@ const STR = {
     partner: 'Partner', moveType: 'Type', depositTxt: 'Deposit money to the cash box', withdrawTxt: 'Withdraw money from the cash box',
     settleTxt: 'Pay the other partner directly (settlement)', descPh2: 'e.g. bank transfer',
     settleHint: 'A settlement is recorded for both partners at once: paid for the payer, received for the other.', saveMove: 'Save entry',
+    hSales: 'Sales', hNet: 'Net', saleToCash: 'Sale money goes into the cash box. Splitting between partners is done later via "Partner entry → Withdrawal".',
     plot: 'Plot', cropName: 'Crop', buyer: 'Buyer', qty: 'Quantity (kg)', price: 'Price (EGP/kg)', saleTotal: 'Sale total',
     whereMoney: 'Where did the money go?', toCash: 'Into the farm cash box', toSplit: 'Split between partners by share',
     toPartner: p => `All received by ${p}`, toMixed: 'Part to cash box, rest split', toBoxAmt: 'Amount into the cash box',
@@ -377,14 +379,16 @@ function hoshaCard(h) {
     <div class="row"><span class="name">${esc(dn(h.name))}</span><span class="chip soft">${h.status === 'منتجة' ? T('producing') : T('setupChip')}</span></div>
     <span class="muted">${h.area} ${T('feddan')} · ${esc(h.crop || '—')}</span>
     <span class="v">${fmt(h.totalCost)}</span>
-    <span class="muted">${fmt(h.perFeddan)} ${T('perFeddanUnit')}</span></a>`;
+    <span class="muted">${fmt(h.perFeddan)} ${T('perFeddanUnit')}</span>
+    ${h.sales !== undefined ? `<div class="row" style="border-top:1px solid var(--border);padding-top:4px;margin-top:2px"><span class="muted">${T('hSales')} ${fmt(h.sales)}</span><b class="${h.net > 0.5 ? 'pos' : h.net < -0.5 ? 'neg' : ''}" style="font-size:13px">${signed(h.net)}</b></div>` : ''}</a>`;
 }
 
 function viewHoshas() { showCached('dash', () => api.get('dashboard'), renderHoshas, viewHoshas); }
 function renderHoshas(d) {
   view().innerHTML = `${bar(T('tabHoshas'))}<div class="wrap">
     <div class="card"><div class="row"><span class="muted">${T('totalSetup')}</span><b>${fmt(d.total.totalCost)}</b></div>
-    <div class="row"><span class="muted">${T('avgFeddan')}</span><b>${fmt(d.total.perFeddan)}</b></div></div>
+    <div class="row"><span class="muted">${T('avgFeddan')}</span><b>${fmt(d.total.perFeddan)}</b></div>
+    ${d.total.sales !== undefined ? `<div class="row"><span class="muted">${T('hSales')}</span><b>${fmt(d.total.sales)}</b></div><div class="row"><span class="muted">${T('hNet')}</span><b class="${d.total.net > 0.5 ? 'pos' : d.total.net < -0.5 ? 'neg' : ''}">${signed(d.total.net)}</b></div>` : ''}</div>
     <div class="grid2">${d.hoshas.map(hoshaCard).join('')}</div>
     <p class="hint">${T('plotsHint')}</p></div>`;
 }
@@ -400,6 +404,8 @@ function renderHosha(h) {
     <div class="grid2" style="margin-top:6px">
       <div><span class="sub">${T('costToDate')}</span><div class="mid">${fmt(h.total)}</div></div>
       <div><span class="sub">${T('costPerFeddan')}</span><div class="mid">${fmt(h.perFeddan)}</div></div>
+      ${h.sales !== undefined ? `<div><span class="sub">${T('hSales')}</span><div class="mid">${fmt(h.sales)}</div></div>
+      <div><span class="sub">${T('hNet')}</span><div class="mid">${signed(h.net)}</div></div>` : ''}
     </div>
   </section>
   <div class="wrap">
@@ -409,8 +415,8 @@ function renderHosha(h) {
         <div class="meter"><i style="width:${Math.round(b.amount / max * 100)}%"></i></div></div>`).join('') : `<div class="empty">${T('noCosts')}</div>`}
     </section>
     <section class="list"><h2 style="font-size:15px">${T('recent')}</h2>
-      ${h.recent.length ? h.recent.map(r => `<div class="item"><div><div class="t">${esc(dn(r.title))}${r.shared ? `<span class="tag">${T('sharedTag')}</span>` : ''}</div>
-        <div class="s">${esc(r.date)} · ${esc(dn(r.by || ''))}${r.desc ? ' · ' + esc(r.desc) : ''}</div></div><span class="a">${fmt(r.amount)}</span></div>`).join('') : `<div class="empty">${T('noMoves')}</div>`}
+      ${h.recent.length ? h.recent.map(r => `<div class="item"><div><div class="t">${esc(r.sale ? T('saleOf') + ' ' + (String(r.title).replace(/^بيع\s*/, '') || T('cropDefault')) : dn(r.title))}${r.shared ? `<span class="tag">${T('sharedTag')}</span>` : ''}</div>
+        <div class="s">${esc(r.date)} · ${esc(dn(r.by || ''))}${r.desc ? ' · ' + esc(r.desc) : ''}</div></div><span class="a ${r.sale ? 'pos' : ''}">${r.sale ? '+' : ''}${fmt(r.amount)}</span></div>`).join('') : `<div class="empty">${T('noMoves')}</div>`}
     </section>
   </div>`;
 }
@@ -523,7 +529,6 @@ async function viewMove() {
 async function viewSale() {
   loading();
   let cfg; try { cfg = await loadConfig(); } catch (e) { return errorView(e, viewSale); }
-  const partners = cfg.partners.map(p => p.name);
   view().innerHTML = `${bar(T('sale'), '#add')}<div class="wrap"><form id="f" novalidate>
     <div class="grid2">
       <div class="field"><label for="date">${T('date')}</label><input id="date" type="date" value="${today()}"></div>
@@ -538,14 +543,7 @@ async function viewSale() {
       <div class="field"><label for="price">${T('price')}</label><input id="price" type="number" inputmode="decimal" min="0" step="any"></div>
     </div>
     <div class="total-box"><span class="muted">${T('saleTotal')}</span><span class="mid" id="total">0 ${T('egp')}</span></div>
-    <fieldset><legend>${T('whereMoney')}</legend>
-      <label class="opt"><input type="radio" name="dest" value="الخزنة" checked>${T('toCash')}</label>
-      <label class="opt"><input type="radio" name="dest" value="توزيع على الشريكين">${T('toSplit')}</label>
-      ${partners.map(p => `<label class="opt"><input type="radio" name="dest" value="${esc(p)}">${esc(T('toPartner', dn(p)))}</label>`).join('')}
-      <label class="opt"><input type="radio" name="dest" value="تقسيم">${T('toMixed')}</label>
-      <div class="field" id="splitBox" hidden><label for="toBox">${T('toBoxAmt')}</label><input id="toBox" type="number" inputmode="decimal" min="0" step="any"></div>
-    </fieldset>
-    <section class="card" id="impact"></section>
+    <p class="hint">${T('saleToCash')}</p>
     <div class="field"><label for="notes">${T('notes')}</label><input id="notes"></div>
     <button class="btn" type="submit">${T('saveSale')}</button>
   </form></div>`;
@@ -553,14 +551,6 @@ async function viewSale() {
   const calc = () => {
     const total = (Number($('#qty').value) || 0) * (Number($('#price').value) || 0);
     $('#total').textContent = fmt(total) + ' ' + T('egp');
-    const dest = radioVal('dest');
-    $('#splitBox').hidden = dest !== 'تقسيم';
-    const eff = {}; partners.forEach(p => { eff[p] = 0; });
-    if (partners.indexOf(dest) !== -1) {
-      cfg.partners.forEach(p => { eff[p.name] = (p.name === dest ? -total : 0) + p.share * total; });
-    }
-    const rows = partners.map(p => `<div class="row"><span>${esc(dn(p))}</span><b class="${eff[p] > 0.5 ? 'pos' : eff[p] < -0.5 ? 'neg' : ''}">${signed(eff[p])}</b></div>`).join('');
-    $('#impact').innerHTML = `<b style="font-size:13px">${T('impact')}</b>${rows}`;
   };
   f.addEventListener('input', calc); f.addEventListener('change', calc); calc();
   submitWith(f, 'addSale', () => {
@@ -568,7 +558,7 @@ async function viewSale() {
     if (!(qty > 0) || !(price > 0)) throw new Error(T('enterQtyPrice'));
     return {
       date: $('#date').value, hosha: $('#hosha').value, crop: $('#crop').value, buyer: $('#buyer').value,
-      qty, price, dest: radioVal('dest'), toTreasury: Number($('#toBox').value) || 0, notes: $('#notes').value,
+      qty, price, dest: 'الخزنة', notes: $('#notes').value,
     };
   }, () => { $('#qty').value = ''; $('#price').value = ''; calc(); });
 }

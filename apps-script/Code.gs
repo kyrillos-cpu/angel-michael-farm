@@ -223,7 +223,7 @@ function getTranslations_() {
 }
 
 function getDashboard_() {
-  const v = sh_(SH.dash).getRange('B4:H40').getValues(); // قراية واحدة بدل خمسة
+  const v = sh_(SH.dash).getRange('B4:J40').getValues(); // قراية واحدة بدل خمسة
   const at = (r, c) => v[r - 4][c - 2];
   const k = v[3].slice(0, 6);
   const p = [v[7].slice(0, 5), v[8].slice(0, 5)];
@@ -234,8 +234,8 @@ function getDashboard_() {
     kpis: { yearCost: num_(k[0]), totalCost: num_(k[1]), perFeddan: num_(k[2]), cash: num_(k[3]), yearSales: num_(k[4]), assets: num_(k[5]) },
     partners: p.filter(r => r[0] !== '').map(r => ({ name: r[0], share: num_(r[1]), net: num_(r[2]), balance: num_(r[3]), status: r[4] })),
     settleText: at(13, 2),
-    hoshas: h.slice(0, 8).map(r => ({ name: r[0], area: num_(r[1]), status: r[2], crop: r[3], yearCost: num_(r[4]), totalCost: num_(r[5]), perFeddan: num_(r[6]) })),
-    total: { area: num_(h[8][1]), yearCost: num_(h[8][4]), totalCost: num_(h[8][5]), perFeddan: num_(h[8][6]) },
+    hoshas: h.slice(0, 8).map(r => ({ name: r[0], area: num_(r[1]), status: r[2], crop: r[3], yearCost: num_(r[4]), totalCost: num_(r[5]), perFeddan: num_(r[6]), sales: num_(r[7]), net: num_(r[8]) })),
+    total: { area: num_(h[8][1]), yearCost: num_(h[8][4]), totalCost: num_(h[8][5]), perFeddan: num_(h[8][6]), sales: num_(h[8][7]), net: num_(h[8][8]) },
     monthly: m.map(r => ({ month: r[0], cost: num_(r[1]) })),
   };
 }
@@ -307,10 +307,19 @@ function getHosha_(name) {
   if (dep) breakdown.push({ name: 'إهلاك الأصول (نصيب الحوشة)', amount: dep });
   breakdown.sort((x, y) => y.amount - x.amount);
   const total = direct + shared * ratio + dep;
+  // المبيعات اللي اتسجلت على الحوشة دي
+  let sales = 0;
+  const sa = sh_(SH.sales), sl = lastDataRow_(sa);
+  if (sl >= 2) sa.getRange(2, 1, sl - 1, 12).getValues().forEach(r => {
+    if (r[1] === '' || r[4] !== name) return;
+    const amt = num_(r[9]);
+    sales += amt;
+    recent.push({ date: fmtDate_(r[1]), title: 'بيع ' + (r[5] || 'محصول'), amount: amt, by: r[6], desc: r[11], sale: true });
+  });
   recent.sort((x, y) => (x.date < y.date ? 1 : -1));
   return {
     name, area, crop: cfg[2], variety: cfg[3], status: cfg[5], ratio,
-    total, perFeddan: area ? total / area : 0, breakdown, recent: recent.slice(0, 25),
+    total, perFeddan: area ? total / area : 0, sales, net: sales - total, breakdown, recent: recent.slice(0, 25),
   };
 }
 
