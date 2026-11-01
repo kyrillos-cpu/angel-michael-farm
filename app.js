@@ -31,14 +31,14 @@ const STR = {
     crop: 'المحصول', variety: 'الصنف', notSet: 'لم يُحدد', sharedPct: 'نصيبها من المشترك', costToDate: 'التكلفة حتى اليوم',
     costPerFeddan: 'تكلفة الفدان', byItem: 'التكلفة حسب البند', noCosts: 'لسه مفيش مصروفات على الحوشة دي', recent: 'آخر الحركات',
     sharedTag: 'نصيب من مشترك', noMoves: 'مفيش حركات',
-    newTitle: 'تسجيل جديد', expense: 'مصروف', expenseSub: 'على حوشة أو مشترك، من الخزنة أو من جيب شريك',
+    newTitle: 'تسجيل جديد', expense: 'مصروف', expenseSub: 'على حوشة أو مشترك، وبيتخصم من الخزنة',
     move: 'حركة شريك', moveSub: 'توريد للخزنة، سحب، أو تسوية بين الشريكين', sale: 'بيع محصول', saleSub: 'والفلوس راحت الخزنة ولا اتوزعت',
     asset: 'أصل ثابت', assetSub: 'بير، طلمبة، سور، ماشيات… بيتهلك على الحوش',
     saving: 'بيحفظ…', saved: 'اتسجّل بنجاح', fromCash: 'من الخزنة', paidOwn: p => `${p} دفع من جيبه`, alreadyRecorded: 'اتسجل في المصروفات قبل كده',
     addExpense: 'تسجيل مصروف', date: 'التاريخ', amount: 'المبلغ (ج.م)', item: 'البند', chargeTo: 'يتحمّل على', specificPlot: 'حوشة محددة',
     sharedArea: 'مشترك (يتوزع بالمساحة)', whoPaid: 'مين دفع؟', supplier: 'المورد / المقاول', supplierPh: 'اختار أو اكتب اسم',
     desc: 'البيان', descPh: 'مثال: تسوية بالليزر', docNo: 'رقم الفاتورة / الإيصال', saveExpense: 'حفظ المصروف',
-    ownHint: p => `المبلغ هيتحسب لـ${p} كأنه ورّده، والمصروف نفسه بيتقسم على الشريكين حسب النسبة.`, enterAmount: 'اكتب المبلغ',
+    cashHint: 'المصروف بيتخصم من الخزنة. فلوس الشركاء بتدخل الخزنة من "حركة شريك ← توريد للخزنة".', enterAmount: 'اكتب المبلغ',
     partner: 'الشريك', moveType: 'نوع الحركة', depositTxt: 'توريد فلوس للخزنة', withdrawTxt: 'سحب فلوس من الخزنة',
     settleTxt: 'دفع للشريك التاني مباشرة (تسوية)', descPh2: 'مثال: تحويل بنكي',
     settleHint: 'التسوية بتتسجل على الاتنين مرة واحدة: على اللي دفع كمدفوعة، وعلى التاني كمستلمة.', saveMove: 'حفظ الحركة',
@@ -48,7 +48,7 @@ const STR = {
     impact: 'الأثر على ميزان الشركاء', notes: 'ملاحظات', saveSale: 'حفظ البيعة', enterQtyPrice: 'اكتب الكمية والسعر',
     assetName: 'الأصل', assetPh: 'مثال: بير ارتوازي، طلمبة، سور', startDate: 'تاريخ التشغيل', life: 'العمر (سنوات)', cost: 'التكلفة (ج.م)',
     allPlots: 'كل الحوش (مشترك بالمساحة)', paidFrom: 'الفلوس اتدفعت منين؟', supplierOnly: 'المورد',
-    assetHint: 'الأصل بيتهلك كل شهر على عمره، والإهلاك بيتوزع على الحوش. ولو اخترت مين دفع، المبلغ بيتسجل في اليومية كمان عشان الخزنة وميزان الشركاء.',
+    assetHint: 'تمن الأصل بيتخصم من الخزنة ويتسجل في اليومية، وبعدين بيتهلك كل شهر على عمره والإهلاك بيتوزع على الحوش.',
     saveAsset: 'حفظ الأصل', enterAssetName: 'اكتب اسم الأصل', enterCostLife: 'اكتب التكلفة والعمر',
     journal: 'السجل', refresh: 'تحديث', kExpense: 'مصروف', kMove: 'شريك', kSale: 'بيع', saleOf: 'بيع', cropDefault: 'محصول',
     noEntries: 'لسه مفيش حركات. ابدأ من زرار + تحت.', editInSheet: 'التعديل والمسح بيتعملوا من الشيت نفسه.',
@@ -78,14 +78,14 @@ const STR = {
     crop: 'Crop', variety: 'Variety', notSet: 'not set', sharedPct: 'share of shared costs', costToDate: 'Cost to date',
     costPerFeddan: 'Cost per feddan', byItem: 'Cost by item', noCosts: 'No expenses on this plot yet', recent: 'Recent entries',
     sharedTag: 'shared portion', noMoves: 'No entries',
-    newTitle: 'New entry', expense: 'Expense', expenseSub: 'On a plot or shared, from the cash box or a partner’s pocket',
+    newTitle: 'New entry', expense: 'Expense', expenseSub: 'On a plot or shared, paid from the cash box',
     move: 'Partner entry', moveSub: 'Deposit, withdrawal, or settlement between partners', sale: 'Crop sale', saleSub: 'Into the cash box or split',
     asset: 'Fixed asset', assetSub: 'Well, pump, fence, roads… depreciated across plots',
     saving: 'Saving…', saved: 'Saved', fromCash: 'From the cash box', paidOwn: p => `${p} paid personally`, alreadyRecorded: 'Already recorded as an expense',
     addExpense: 'New expense', date: 'Date', amount: 'Amount (EGP)', item: 'Item', chargeTo: 'Charge to', specificPlot: 'Specific plot',
     sharedArea: 'Shared (by area)', whoPaid: 'Who paid?', supplier: 'Supplier / contractor', supplierPh: 'Pick or type a name',
     desc: 'Description', descPh: 'e.g. laser leveling', docNo: 'Invoice / receipt no.', saveExpense: 'Save expense',
-    ownHint: p => `This counts as a contribution from ${p}; the expense itself is split between partners by share.`, enterAmount: 'Enter the amount',
+    cashHint: 'Expenses are paid from the cash box. Partner money goes in through "Partner entry → Deposit to cash box".', enterAmount: 'Enter the amount',
     partner: 'Partner', moveType: 'Type', depositTxt: 'Deposit money to the cash box', withdrawTxt: 'Withdraw money from the cash box',
     settleTxt: 'Pay the other partner directly (settlement)', descPh2: 'e.g. bank transfer',
     settleHint: 'A settlement is recorded for both partners at once: paid for the payer, received for the other.', saveMove: 'Save entry',
@@ -95,7 +95,7 @@ const STR = {
     impact: 'Effect on partner balance', notes: 'Notes', saveSale: 'Save sale', enterQtyPrice: 'Enter quantity and price',
     assetName: 'Asset', assetPh: 'e.g. artesian well, pump, fence', startDate: 'In service from', life: 'Useful life (years)', cost: 'Cost (EGP)',
     allPlots: 'All plots (shared by area)', paidFrom: 'Paid from?', supplierOnly: 'Supplier',
-    assetHint: 'The asset is depreciated monthly over its life and spread across plots. If you choose who paid, it is also recorded in the journal for the cash box and partner balance.',
+    assetHint: 'The asset price is paid from the cash box and recorded in the journal, then depreciated monthly over its life across plots.',
     saveAsset: 'Save asset', enterAssetName: 'Enter the asset name', enterCostLife: 'Enter cost and life',
     journal: 'Log', refresh: 'Refresh', kExpense: 'Expense', kMove: 'Partner', kSale: 'Sale', saleOf: 'Sale of', cropDefault: 'crop',
     noEntries: 'No entries yet. Start with the + button below.', editInSheet: 'Editing and deleting are done in the sheet.',
@@ -478,7 +478,7 @@ async function viewExpense() {
       <div class="seg" data-seg="ctype"><button type="button" data-v="hosha" aria-pressed="true">${T('specificPlot')}</button><button type="button" data-v="shared" aria-pressed="false">${T('sharedArea')}</button></div>
       <div id="hoshaBox">${hoshaChips(cfg)}</div>
     </fieldset>
-    <fieldset><legend>${T('whoPaid')}</legend>${payOptions(cfg, 'paid')}<p class="hint" id="payHint"></p></fieldset>
+    <p class="hint">${T('cashHint')}</p>
     <div class="field"><label for="supplier">${T('supplier')}</label><input id="supplier" list="suppliers" placeholder="${T('supplierPh')}">${supplierList(cfg)}</div>
     <div class="field"><label for="desc">${T('desc')}</label><input id="desc" placeholder="${T('descPh')}"></div>
     <div class="field"><label for="doc">${T('docNo')}</label><input id="doc"></div>
@@ -486,15 +486,13 @@ async function viewExpense() {
   </form></div>`;
   const f = $('#f');
   segInit(f, (seg, v) => { if (seg === 'ctype') $('#hoshaBox').hidden = v !== 'hosha'; });
-  const hint = () => { const p = radioVal('paid'); $('#payHint').textContent = p && p !== 'الخزنة' ? T('ownHint', dn(p)) : ''; };
-  f.addEventListener('change', hint); hint();
   submitWith(f, 'addExpense', () => {
     const amount = Number($('#amount').value);
     if (!(amount > 0)) throw new Error(T('enterAmount'));
     return {
       date: $('#date').value, amount, item: $('#item').value,
       center: segVal('ctype') === 'shared' ? 'مشترك' : segVal('hosha'),
-      paidBy: radioVal('paid'), supplier: $('#supplier').value, desc: $('#desc').value, docNo: $('#doc').value,
+      paidBy: 'الخزنة', supplier: $('#supplier').value, desc: $('#desc').value, docNo: $('#doc').value,
     };
   }, () => { CFG = null; store.del('cfg'); $('#amount').value = ''; $('#desc').value = ''; $('#doc').value = ''; });
 }
@@ -586,7 +584,6 @@ async function viewAsset() {
     </div>
     <div class="field"><label for="cost">${T('cost')}</label><input id="cost" type="number" inputmode="decimal" min="0" step="any"></div>
     <div class="field"><label for="center">${T('chargeTo')}</label><select id="center"><option value="مشترك">${T('allPlots')}</option>${hoshaOptions(cfg)}</select></div>
-    <fieldset><legend>${T('paidFrom')}</legend>${payOptions(cfg, 'paid', true)}</fieldset>
     <div class="field"><label for="supplier">${T('supplierOnly')}</label><input id="supplier" list="suppliers">${supplierList(cfg)}</div>
     <p class="hint">${T('assetHint')}</p>
     <button class="btn" type="submit">${T('saveAsset')}</button>
@@ -596,7 +593,7 @@ async function viewAsset() {
     if (!$('#name').value.trim()) throw new Error(T('enterAssetName'));
     const cost = Number($('#cost').value), life = Number($('#life').value);
     if (!(cost > 0) || !(life > 0)) throw new Error(T('enterCostLife'));
-    return { name: $('#name').value.trim(), date: $('#date').value, cost, life, center: $('#center').value, paidBy: radioVal('paid'), supplier: $('#supplier').value };
+    return { name: $('#name').value.trim(), date: $('#date').value, cost, life, center: $('#center').value, paidBy: 'الخزنة', supplier: $('#supplier').value };
   }, () => { location.hash = '#home'; });
 }
 
