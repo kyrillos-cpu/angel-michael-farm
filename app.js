@@ -66,7 +66,7 @@ const STR = {
     buyHint: 'الشراء بيتخصم من الخزنة ويتسجل في اليومية على "مخزن"، ومش بيتحسب على أي حوشة غير لما يتصرف.',
     issueHint: 'الصرف مش بيخصم من الخزنة (اتدفع وقت الشراء). قيمته = الكمية × متوسط سعر الشراء، وبتتحمّل على الحوشة.',
     noStock: 'المخزن فاضي. ابدأ بـ"شراء للمخزن".', stockMoves: 'آخر حركات المخزن', bought: 'شراء', issued: 'صرف', value: 'القيمة',
-    issueFor: 'الصرف على', emptyStock: 'مفيش رصيد في المخزن',
+    issueFor: 'الصرف على', emptyStock: 'مفيش رصيد في المخزن', needDeploy: 'المخزن محتاج تحديث كود السكريبت في الشيت (Deploy نسخة جديدة).',
     settleSentence: (payer, recv, a, b) => `${payer} يدفع ${a} ج.م لـ${recv} مباشرة، أو يورّد ${b} ج.م للخزنة، عشان الاتنين يتساووا`,
   },
   en: {
@@ -124,7 +124,7 @@ const STR = {
     buyHint: 'A purchase is paid from the cash box and logged against "Store"; it is not charged to any plot until issued.',
     issueHint: 'An issue does not touch the cash box (paid at purchase). Its value = qty × average purchase price, charged to the plot.',
     noStock: 'The store is empty. Start with "Buy for store".', stockMoves: 'Recent store entries', bought: 'Purchase', issued: 'Issue', value: 'Value',
-    issueFor: 'Issue to', emptyStock: 'No stock available',
+    issueFor: 'Issue to', emptyStock: 'No stock available', needDeploy: 'The store needs the updated script code (Deploy a new version).',
     settleSentence: (payer, recv, a, b) => `${payer} pays ${a} EGP directly to ${recv}, or deposits ${b} EGP to the cash box, to even out.`,
   },
 };
@@ -648,7 +648,7 @@ function renderPartners(d) {
 
 // ===================== المخزن =====================
 const qf = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-US');
-async function fetchStock() { await loadConfig(); return api.get('stock'); }
+async function fetchStock() { await loadConfig(); try { return await api.get('stock'); } catch (e) { if (/غير معروف/.test(e.message)) throw new Error(T('needDeploy')); throw e; } }
 function viewStock() { showCached('stock', fetchStock, renderStock, viewStock); }
 function renderStock(s) {
   view().innerHTML = `${bar(T('stock'), '#home')}<div class="wrap">
@@ -668,7 +668,7 @@ function renderStock(s) {
 async function loadStockAndCfg() {
   const cfg = await loadConfig();
   let st = store.get('v_stock', null); st = st && st.d;
-  if (!st || Date.now() - (store.get('v_stock', {}).t || 0) > FRESH_MS) { try { st = await api.get('stock'); putView('stock', st); } catch (e) { if (!st) st = { items: [], total: 0, moves: [] }; } }
+  if (!st || Date.now() - (store.get('v_stock', {}).t || 0) > FRESH_MS) { try { st = await api.get('stock'); putView('stock', st); } catch (e) { if (/غير معروف/.test(e.message)) throw new Error(T('needDeploy')); if (!st) st = { items: [], total: 0, moves: [] }; } }
   return [cfg, st];
 }
 
