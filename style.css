@@ -110,3 +110,8 @@ legend { padding: 0; margin-bottom: 8px; }
 
 [dir="ltr"] .icon-btn.back svg { transform: scaleX(-1); }
 .lang-btn { border: 0; background: rgba(255,255,255,.16); color: #fff; min-width: 40px; min-height: 32px; font-size: 13px; cursor: pointer; }
+
+.menu-grid a.out { background: var(--neg-bg); border: 1.5px solid #E7B9A6; }
+.menu-grid a.out b { color: var(--neg); }
+.menu-grid a.in { background: var(--lg); border: 1.5px solid #A9CDB2; }
+.menu-grid a.in b { color: var(--pos); }
