@@ -266,7 +266,7 @@ async function doInstall() {
   installEvt.prompt(); await installEvt.userChoice; installEvt = null;
   const b = $('#installBtn'); if (b) b.hidden = true;
 }
-if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').then(r => r.update()).catch(() => {}));
 
 // ===================== الإعداد =====================
 function settingsForm(isSetup) {
