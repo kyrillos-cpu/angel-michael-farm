@@ -22,6 +22,7 @@ const SH = {
   settings: 'الإعدادات',
   stockMoves: 'حركة المخزن',
   products: 'الأصناف',
+  supplierPay: 'سداد الموردين',
 };
 
 // ===================== قايمة الشيت =====================
@@ -46,7 +47,7 @@ function setAppKey() {
 
 // ===================== التسريع =====================
 // الردود بتتحفظ في الكاش لحد ما حد يسجّل حركة جديدة، فالقراية بتبقى سريعة.
-const READ_KEYS = ['dashboard', 'journal', 'partners', 'all', 'stock', 'assets'];
+const READ_KEYS = ['dashboard', 'journal', 'partners', 'all', 'stock', 'assets', 'suppliers'];
 function cache_() { return CacheService.getScriptCache(); }
 function cached_(key, ttl, build) {
   const c = cache_(), hit = c.get(key);
@@ -111,6 +112,7 @@ function handle_(p, data) {
       else if (a === 'partners') result = cached_('partners', 21600, getPartners_);
       else if (a === 'stock') result = cached_('stock', 21600, getStock_);
       else if (a === 'assets') result = cached_('assets', 21600, getAssets_);
+      else if (a === 'suppliers') result = cached_('suppliers', 21600, getSuppliers_);
       else throw new Error('طلب غير معروف');
     } else {
       const lock = LockService.getScriptLock();
@@ -122,6 +124,7 @@ function handle_(p, data) {
         else if (a === 'addAsset') result = addAsset_(data);
         else if (a === 'addPurchase') result = addPurchase_(data);
         else if (a === 'addIssue') result = addIssue_(data);
+        else if (a === 'paySupplier') result = paySupplier_(data);
         else if (a === 'setYear') result = setYear_(data);
         else throw new Error('طلب غير معروف');
         SpreadsheetApp.flush();
@@ -213,7 +216,7 @@ function getConfig_() {
     partners: st.getRange('B10:C11').getValues().filter(r => r[0] !== '').map(r => ({ name: r[0], share: num_(r[1]) })),
     hoshas: h.filter(r => r[0] !== '').map(r => ({ name: r[0], area: num_(r[1]), crop: r[2], variety: r[3], status: r[5], ratio: num_(r[7]) })),
     items: it.map(r => ({ name: r[0], group: r[1] })),
-    payMethods: col_(st, 'B16:B19'),
+    payMethods: col_(st, 'B16:B20'),
     costCenters: col_(st, 'C16:C26'),
     units: col_(st, 'I16:I30'),
     products: sh_(SH.products).getRange('A2:C200').getValues().filter(r => r[0] !== '').map(r => ({ name: r[0], item: r[1], unit: r[2] })),
@@ -247,7 +250,7 @@ function getDashboard_() {
   const m = v.slice(25, 37).map(r => r.slice(0, 2));
   return {
     year: at(4, 3),
-    kpis: { yearCost: num_(k[0]), totalCost: num_(k[1]), perFeddan: num_(k[2]), cash: num_(k[3]), yearSales: num_(k[4]), assets: num_(k[5]), stock: num_(v[3][6]) },
+    kpis: { yearCost: num_(k[0]), totalCost: num_(k[1]), perFeddan: num_(k[2]), cash: num_(k[3]), yearSales: num_(k[4]), assets: num_(k[5]), stock: num_(v[3][6]), payable: num_(v[3][7]) },
     partners: p.filter(r => r[0] !== '').map(r => ({ name: r[0], share: num_(r[1]), net: num_(r[2]), balance: num_(r[3]), status: r[4] })),
     settleText: at(13, 2),
     hoshas: h.slice(0, 8).map(r => ({ name: r[0], area: num_(r[1]), status: r[2], crop: r[3], yearCost: num_(r[4]), totalCost: num_(r[5]), perFeddan: num_(r[6]), sales: num_(r[7]), net: num_(r[8]) })),
@@ -290,6 +293,12 @@ function getRecent_(limit) {
     if (r[1] === '') return;
     const amt = num_(r[9]);
     items.push({ kind: 'sale', id: r[0], date: fmtDate_(r[1]), title: 'بيع ' + (r[5] || 'محصول'), center: r[4], buyer: r[6], amount: amt, dest: r[10], desc: r[11], cash: r[10] === 'الخزنة' ? amt : 0 });
+  });
+  const p = sh_(SH.supplierPay), pl = lastDataRow_(p);
+  if (pl >= 2) p.getRange(2, 1, pl - 1, 6).getValues().forEach(r => {
+    if (r[1] === '') return;
+    const amt = num_(r[4]);
+    items.push({ kind: 'pay', id: r[0], date: fmtDate_(r[1]), title: 'سداد مورد', supplier: r[3], amount: amt, desc: r[5], cash: -amt });
   });
   // الرصيد بعد كل حركة: الداخل قبل الخارج في نفس اليوم
   items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : b.cash - a.cash));
@@ -372,6 +381,7 @@ function addExpense_(d) {
   requireIn_(d.item, cfg.items.map(x => x.name), 'البند');
   requireIn_(d.center, cfg.costCenters, 'مركز التكلفة');
   requireIn_(d.paidBy, cfg.payMethods, 'طريقة الدفع');
+  if (d.paidBy === 'آجل' && !String(d.supplier || '').trim()) throw new Error('اكتب اسم المورد عشان المصروف الآجل');
   return { id: journalRow_(d) };
 }
 
@@ -512,7 +522,9 @@ function addPurchase_(d) {
   }
   const item = p.values[1], unit = p.values[2];
   const supplier = ensureSupplier_(d.supplier);
-  const journalId = journalRow_({ date: d.date, item, center: 'مخزن', amount: total, paidBy: 'الخزنة', supplier,
+  const credit = d.pay === 'آجل';
+  if (credit && !supplier) throw new Error('اكتب اسم المورد عشان الشراء الآجل');
+  const journalId = journalRow_({ date: d.date, item, center: 'مخزن', amount: total, paidBy: credit ? 'آجل' : 'الخزنة', supplier,
     desc: 'شراء ' + product + ' ' + qty + ' ' + unit + (d.desc ? ' – ' + d.desc : ''), user: d.user });
   const id = stockMove_({ date: d.date, product, type: 'شراء', qty, value: total, center: 'مخزن', supplier, desc: d.desc, journalId, user: d.user });
   return { id, journalId };
@@ -533,4 +545,39 @@ function addIssue_(d) {
     desc: 'صرف ' + d.product + ' ' + qty + ' ' + unit + (d.desc ? ' – ' + d.desc : ''), user: d.user });
   const id = stockMove_({ date: d.date, product: d.product, type: 'صرف', qty, value, center: d.center, desc: d.desc, journalId, user: d.user });
   return { id, journalId, value };
+}
+
+
+// ===================== الموردين (الآجل) =====================
+/** كل مورد: اشترينا منه آجل بكام، ودفعنا له كام، وفاضل له كام. */
+function getSuppliers_() {
+  const sp = sh_(SH.suppliers);
+  const rows = sp.getRange(2, 1, Math.max(1, sp.getMaxRows() - 1), 8).getValues().filter(r => r[0] !== '');
+  const j = sh_(SH.journal), jl = lastDataRow_(j);
+  const credit = jl >= 2 ? j.getRange(2, 1, jl - 1, 11).getValues().filter(r => r[1] !== '' && r[8] === 'آجل') : [];
+  const p = sh_(SH.supplierPay), pl = lastDataRow_(p);
+  const pays = pl >= 2 ? p.getRange(2, 1, pl - 1, 6).getValues().filter(r => r[1] !== '') : [];
+  const items = rows.map(r => {
+    const name = String(r[0]);
+    const lines = credit.filter(l => l[9] === name).map(l => ({ type: 'buy', date: fmtDate_(l[1]), desc: l[10], amount: num_(l[7]) }))
+      .concat(pays.filter(x => x[3] === name).map(x => ({ type: 'pay', date: fmtDate_(x[1]), desc: x[5], amount: num_(x[4]) })))
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+    return { name, phone: r[1], credit: num_(r[5]), paid: num_(r[6]), due: num_(r[7]), lines };
+  }).filter(x => x.credit || x.paid);
+  items.sort((a, b) => b.due - a.due);
+  return { items, due: items.reduce((t, x) => t + x.due, 0) };
+}
+
+/** سداد لمورد: بيخرج من الخزنة ويقلل اللي له. */
+function paySupplier_(d) {
+  const name = String(d.supplier || '').trim();
+  if (!name) throw new Error('اختار المورد');
+  const amt = amount_(d.amount);
+  const sup = getSuppliers_().items.find(x => x.name === name);
+  const due = sup ? sup.due : 0;
+  if (amt > due + 0.5) throw new Error('المبلغ أكبر من المستحق للمورد (' + Math.round(due).toLocaleString('en-US') + ')');
+  const s = sh_(SH.supplierPay);
+  const last = lastDataRow_(s), row = last + 1, id = nextId_(s, last);
+  writeCols_(s, row, { 1: id, 2: parseDate_(d.date), 4: name, 5: amt, 6: d.desc || '', 7: d.user || '' });
+  return { id };
 }

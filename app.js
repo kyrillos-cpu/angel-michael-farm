@@ -70,6 +70,11 @@ const STR = {
     assets: 'الأصول', assetsValue: 'قيمة الأصول', assetCost: 'التكلفة', assetDep: 'اتهلك لحد النهارده', assetBook: 'القيمة الحالية',
     perMonth: 'في الشهر', years: n => `${n} سنة`, noDep: 'بدون إهلاك', inService: 'التشغيل', spentOn: 'اللي اتصرف عليه',
     assetsHint: 'الأصل بيتحمّل على الحوش على شكل إهلاك شهري طول عمره، مش مرة واحدة.', noAssets: 'لسه مفيش أصول',
+    payHow: 'الدفع', payCash: 'كاش من الخزنة', payCredit: 'آجل على المورد', creditHint: 'الآجل مش بيخصم من الخزنة دلوقتي. بيتسجّل للمورد، ولما تدفع له سجّل "سداد مورد".',
+    needSupplier: 'اكتب اسم المورد', credit: 'آجل', paySup: 'سداد مورد', paySupSub: 'فلوس من الخزنة لمورد اشترينا منه آجل',
+    suppliers: 'الموردين', suppliersSub: 'مين لينا عنده ومين ليه عندنا', payable: 'مستحق للموردين', due: 'المتبقي له',
+    creditBuys: 'مشتريات آجل', paidTo: 'اتدفع له', savePay: 'حفظ السداد', noSuppliers: 'مفيش مشتريات آجل لسه',
+    payAll: 'سدّد', cPay: 'سداد الموردين',
     cDep: 'توريد الشركاء', cSales: 'المبيعات', cOut: 'المصروفات والأصول', cWd: 'سحب الشركاء',
     ledger: 'حركة الفلوس', allF: 'الكل', inF: 'داخل', outF: 'خارج', assetsF: 'أصول', expF: 'مصروفات', storeF: 'مخزن', salesF: 'بيع',
     totalIn: 'دخل الخزنة', totalOut: 'خرج من الخزنة', balAfter: 'الرصيد', allYears: 'كل السنين', count: n => `${n} حركة`, noCash: 'من غير خزنة',
@@ -134,6 +139,11 @@ const STR = {
     assets: 'Assets', assetsValue: 'Assets value', assetCost: 'Cost', assetDep: 'Depreciated to date', assetBook: 'Current value',
     perMonth: 'per month', years: n => `${n} years`, noDep: 'Not depreciated', inService: 'In service', spentOn: 'Spent on it',
     assetsHint: 'An asset is charged to the plots as monthly depreciation over its life, not all at once.', noAssets: 'No assets yet',
+    payHow: 'Payment', payCash: 'Cash from box', payCredit: 'On credit (supplier)', creditHint: 'Credit is not taken from the cash box now. It is owed to the supplier; when you pay, record "Pay supplier".',
+    needSupplier: 'Enter the supplier name', credit: 'Credit', paySup: 'Pay supplier', paySupSub: 'Cash to a supplier we bought from on credit',
+    suppliers: 'Suppliers', suppliersSub: 'What we owe each supplier', payable: 'Owed to suppliers', due: 'Still owed',
+    creditBuys: 'Credit purchases', paidTo: 'Paid', savePay: 'Save payment', noSuppliers: 'No credit purchases yet',
+    payAll: 'Pay', cPay: 'Supplier payments',
     cDep: 'Partner deposits', cSales: 'Sales', cOut: 'Expenses & assets', cWd: 'Partner withdrawals',
     ledger: 'Money flow', allF: 'All', inF: 'In', outF: 'Out', assetsF: 'Assets', expF: 'Expenses', storeF: 'Store', salesF: 'Sales',
     totalIn: 'Into cash box', totalOut: 'Out of cash box', balAfter: 'Balance', allYears: 'All years', count: n => `${n} entries`, noCash: 'no cash',
@@ -245,7 +255,7 @@ function errorView(e, retry) {
 // بيعرض آخر بيانات محفوظة فوراً، وبعدين بيحدّثها من الشيت في الخلفية.
 const FRESH_MS = 60 * 1000; // لو البيانات أحدث من دقيقة مش بنطلبها تاني
 function putView(key, d) { store.set('v_' + key, { t: Date.now(), d }); }
-function markStale() { ['dash', 'journal', 'partners', 'stock', 'assets'].forEach(k => { const v = store.get('v_' + k, null); if (v) { v.t = 0; store.set('v_' + k, v); } }); }
+function markStale() { ['dash', 'journal', 'partners', 'stock', 'assets', 'suppliers'].forEach(k => { const v = store.get('v_' + k, null); if (v) { v.t = 0; store.set('v_' + k, v); } }); }
 
 async function showCached(cacheKey, fetcher, render, retry) {
   const key = 'v_' + cacheKey, here = location.hash;
@@ -283,6 +293,7 @@ const routes = {
   home: viewHome, hoshas: viewHoshas, hosha: viewHosha, add: viewAdd, expense: viewExpense, sale: viewSale,
   move: viewMove, asset: viewAsset, journal: viewJournal, partners: viewPartners, settings: viewSettings,
   stock: viewStock, buy: viewBuy, issue: viewIssue, assets: viewAssets, assetinfo: viewAssetInfo,
+  suppliers: viewSuppliers, supplier: viewSupplierInfo, paysup: viewPaySup,
 };
 
 function route() {
@@ -355,7 +366,7 @@ function viewSettings() {
   $('#setForm').onsubmit = saveSettings;
   $('#install2').onclick = doInstall;
   $('#reloadCfg').onclick = async () => { try { await loadConfig(true); toast(T('listsUpdated')); } catch (e) { toast(e.message, true); } };
-  $('#logout').onclick = () => { ['api', 'key', 'cfg', 'v_dash', 'v_journal', 'v_partners', 'v_stock', 'v_assets'].forEach(store.del); CFG = null; location.hash = ''; route(); };
+  $('#logout').onclick = () => { ['api', 'key', 'cfg', 'v_dash', 'v_journal', 'v_partners', 'v_stock', 'v_assets', 'v_suppliers'].forEach(store.del); CFG = null; location.hash = ''; route(); };
 }
 
 // ===================== الرئيسية =====================
@@ -390,6 +401,7 @@ function renderHome(d) {
       <a class="kpi link" href="#assets"><span class="muted">${T('assetsValue')}</span><span class="v">${fmt(d.kpis.assets || 0)}</span><span class="muted sm">${T('details')} ›</span></a>
       <a class="kpi link" href="#stock"><span class="muted">${T('stockValue')}</span><span class="v">${fmt(d.kpis.stock || 0)}</span><span class="muted sm">${T('details')} ›</span></a>
     </div>
+    ${d.kpis.payable !== undefined ? `<a class="card" href="#suppliers" style="text-decoration:none;color:inherit"><div class="row"><span class="muted">${T('payable')}</span><span><b class="${d.kpis.payable > 0.5 ? 'neg' : ''}" style="font-size:18px">${fmt(d.kpis.payable)}</b> <span class="muted sm">›</span></span></div></a>` : ''}
     <section class="card">
       <div class="row"><h2>${T('partnerBalance')}</h2><a href="#partners">${T('details')}</a></div>
       ${d.partners.map(partnerPill).join('')}
@@ -415,14 +427,14 @@ function renderHome(d) {
 // الخزنة = توريد الشركاء + المبيعات − المصروفات − السحب (من حركة الفلوس)
 function cashCard(d) {
   const j = (store.get('v_journal', null) || {}).d;
-  let dep = 0, sal = 0, out = 0, wd = 0;
+  let dep = 0, sal = 0, out = 0, wd = 0, sp = 0;
   const ok = Array.isArray(j) && j.length && j[0].cash !== undefined;
-  if (ok) j.forEach(i => { if (i.kind === 'move') { if (i.cash > 0) dep += i.cash; else wd -= i.cash; } else if (i.kind === 'sale') sal += i.cash; else out -= i.cash; });
+  if (ok) j.forEach(i => { if (i.kind === 'move') { if (i.cash > 0) dep += i.cash; else wd -= i.cash; } else if (i.kind === 'sale') sal += i.cash; else if (i.kind === 'pay') sp -= i.cash; else out -= i.cash; });
   const row = (k, v, cls, sign) => `<div class="row"><span class="muted">${T(k)}</span><b class="${cls}">${sign}${fmt(v)}</b></div>`;
   return `<a class="card" href="#journal" style="text-decoration:none;color:inherit">
     <div class="row"><span class="muted">${T('cash')}</span><span class="muted sm">${T('details')} ›</span></div>
     <span class="big ${d.kpis.cash < 0 ? 'neg' : ''}">${fmt(d.kpis.cash)} <small style="font-size:15px">${T('egp')}</small></span>
-    ${ok ? row('cDep', dep, 'pos', '+') + row('cSales', sal, 'pos', '+') + row('cOut', out, 'neg', '−') + (wd > 0.5 ? row('cWd', wd, 'neg', '−') : '') : ''}
+    ${ok ? row('cDep', dep, 'pos', '+') + row('cSales', sal, 'pos', '+') + row('cOut', out, 'neg', '−') + (sp > 0.5 ? row('cPay', sp, 'neg', '−') : '') + (wd > 0.5 ? row('cWd', wd, 'neg', '−') : '') : ''}
   </a>`;
 }
 
@@ -482,6 +494,8 @@ function viewAdd() {
     <a class="in" href="#sale"><b>${T('sale')}</b><span>${T('saleSub')}</span></a>
     <a class="out" href="#buy"><b>${T('buy')}</b><span>${T('buySub')}</span></a>
     <a class="store" href="#issue"><b>${T('issue')}</b><span>${T('issueSub')}</span></a>
+    <a class="out" href="#paysup"><b>${T('paySup')}</b><span>${T('paySupSub')}</span></a>
+    <a class="store" href="#suppliers"><b>${T('suppliers')}</b><span>${T('suppliersSub')}</span></a>
     <a class="store wide" href="#stock"><b>${T('stock')}</b><span>${T('stockSub')}</span></a>
   </div></div>`;
 }
@@ -524,6 +538,12 @@ function payOptions(cfg, name, includeNone) {
 }
 const supplierList = cfg => `<datalist id="suppliers">${(cfg.suppliers || []).map(s => `<option value="${esc(s)}">`).join('')}</datalist>`;
 const hoshaChips = cfg => `<div class="chips" data-seg="hosha">${cfg.hoshas.map((h, i) => `<button type="button" data-v="${esc(h.name)}" aria-pressed="${i === 0}" aria-label="${esc(dn(h.name))}">${esc(String(dn(h.name)).replace(/^(حوشة|Plot)\s*/, ''))}</button>`).join('')}</div>`;
+const payBox = () => `<fieldset><legend>${T('payHow')}</legend>
+  <div class="seg" data-seg="pay"><button type="button" data-v="cash" aria-pressed="true">${T('payCash')}</button><button type="button" data-v="credit" aria-pressed="false">${T('payCredit')}</button></div>
+  <p class="hint" id="creditHint" hidden>${T('creditHint')}</p></fieldset>`;
+const payInit = root => segInit(root, (seg, v) => { if (seg === 'pay') $('#creditHint').hidden = v !== 'credit'; });
+const isCredit = () => segVal('pay') === 'credit';
+const needSup = () => { if (isCredit() && !$('#supplier').value.trim()) throw new Error(T('needSupplier')); };
 const hoshaOptions = cfg => cfg.hoshas.map(h => `<option value="${esc(h.name)}">${esc(dn(h.name))}</option>`).join('');
 
 async function viewExpense() {
@@ -539,21 +559,22 @@ async function viewExpense() {
       <div class="seg" data-seg="ctype"><button type="button" data-v="hosha" aria-pressed="true">${T('specificPlot')}</button><button type="button" data-v="shared" aria-pressed="false">${T('sharedArea')}</button></div>
       <div id="hoshaBox">${hoshaChips(cfg)}</div>
     </fieldset>
-    <p class="hint">${T('cashHint')}</p>
+    ${payBox()}
     <div class="field"><label for="supplier">${T('supplier')}</label><input id="supplier" list="suppliers" placeholder="${T('supplierPh')}">${supplierList(cfg)}</div>
     <div class="field"><label for="desc">${T('desc')}</label><input id="desc" placeholder="${T('descPh')}"></div>
     <div class="field"><label for="doc">${T('docNo')}</label><input id="doc"></div>
     <button class="btn" type="submit">${T('saveExpense')}</button>
   </form></div>`;
   const f = $('#f');
-  segInit(f, (seg, v) => { if (seg === 'ctype') $('#hoshaBox').hidden = v !== 'hosha'; });
+  segInit(f, (seg, v) => { if (seg === 'ctype') $('#hoshaBox').hidden = v !== 'hosha'; if (seg === 'pay') $('#creditHint').hidden = v !== 'credit'; });
   submitWith(f, 'addExpense', () => {
     const amount = Number($('#amount').value);
     if (!(amount > 0)) throw new Error(T('enterAmount'));
+    needSup();
     return {
       date: $('#date').value, amount, item: $('#item').value,
       center: segVal('ctype') === 'shared' ? 'مشترك' : segVal('hosha'),
-      paidBy: 'الخزنة', supplier: $('#supplier').value, desc: $('#desc').value, docNo: $('#doc').value,
+      paidBy: isCredit() ? 'آجل' : 'الخزنة', supplier: $('#supplier').value, desc: $('#desc').value, docNo: $('#doc').value,
     };
   }, () => { CFG = null; store.del('cfg'); $('#amount').value = ''; $('#desc').value = ''; $('#doc').value = ''; });
 }
@@ -625,20 +646,23 @@ async function viewAsset() {
     <div class="field"><label for="name">${T('assetName')}</label><input id="name" placeholder="${T('assetPh')}"></div>
     <div class="grid2">
       <div class="field"><label for="date">${T('startDate')}</label><input id="date" type="date" value="${today()}"></div>
-      <div class="field"><label for="life">${T('life')}</label><input id="life" type="number" inputmode="decimal" min="0" step="any" value="10"></div>
+      <div class="field"><label for="life">${T('life')}</label><input id="life" type="number" inputmode="decimal" min="0" step="any" value="20"></div>
     </div>
     <div class="field"><label for="cost">${T('cost')}</label><input id="cost" type="number" inputmode="decimal" min="0" step="any"></div>
     <div class="field"><label for="center">${T('chargeTo')}</label><select id="center"><option value="مشترك">${T('allPlots')}</option>${hoshaOptions(cfg)}</select></div>
+    ${payBox()}
     <div class="field"><label for="supplier">${T('supplierOnly')}</label><input id="supplier" list="suppliers">${supplierList(cfg)}</div>
     <p class="hint">${T('assetHint')}</p>
     <button class="btn" type="submit">${T('saveAsset')}</button>
   </form></div>`;
   const f = $('#f');
+  payInit(f);
   submitWith(f, 'addAsset', () => {
     if (!$('#name').value.trim()) throw new Error(T('enterAssetName'));
+    needSup();
     const cost = Number($('#cost').value), life = Number($('#life').value);
     if (!(cost > 0) || !(life > 0)) throw new Error(T('enterCostLife'));
-    return { name: $('#name').value.trim(), date: $('#date').value, cost, life, center: $('#center').value, paidBy: 'الخزنة', supplier: $('#supplier').value };
+    return { name: $('#name').value.trim(), date: $('#date').value, cost, life, center: $('#center').value, paidBy: isCredit() ? 'آجل' : 'الخزنة', supplier: $('#supplier').value };
   }, () => { location.hash = '#home'; });
 }
 
@@ -646,11 +670,11 @@ async function viewAsset() {
 function viewJournal() { showCached('journal', () => api.get('journal'), renderJournal, viewJournal); }
 let JF = { f: 'all', y: 'all' };
 function renderJournal(items) {
-  const label = { expense: T('kExpense'), move: T('kMove'), sale: T('kSale'), asset: T('assetsF'), store: T('storeF') };
+  const label = { expense: T('kExpense'), move: T('kMove'), sale: T('kSale'), asset: T('assetsF'), store: T('storeF'), pay: T('paySup') };
   const isA = i => i.sub === 'asset' && i.desc;
-  const title = i => i.kind === 'sale' ? `${T('saleOf')} ${String(i.title || '').replace(/^بيع\s*/, '') || T('cropDefault')}` : isA(i) ? i.desc : dn(i.title);
+  const title = i => i.kind === 'pay' ? T('paySup') : i.kind === 'sale' ? `${T('saleOf')} ${String(i.title || '').replace(/^بيع\s*/, '') || T('cropDefault')}` : isA(i) ? i.desc : dn(i.title);
   const sub = i => isA(i) ? esc(String(i.note || '').replace(/^أصل:\s*/, '')) : i.kind === 'expense' ? `${esc(dn(i.center))}${i.supplier ? ' · ' + esc(i.supplier) : ''}`
-    : i.kind === 'move' ? esc(pn(i.partner)) : `${esc(dn(i.center))} · ${esc(dn(i.dest))}${i.buyer ? ' · ' + esc(i.buyer) : ''}`;
+    : i.kind === 'move' ? esc(pn(i.partner)) : i.kind === 'pay' ? esc(i.supplier) : `${esc(dn(i.center))} · ${esc(dn(i.dest))}${i.buyer ? ' · ' + esc(i.buyer) : ''}`;
   const has = items.length && items[0].cash !== undefined;
   const cashOf = i => has ? i.cash : (i.kind === 'expense' ? -i.amount : i.amount);
   const years = [...new Set(items.map(i => String(i.date).slice(0, 4)))].sort().reverse();
@@ -676,7 +700,7 @@ function renderJournal(items) {
     <div class="t">${esc(title(i))}<span class="tag">${label[k]}</span></div>
     <div class="s">${esc(i.date)} · ${sub(i)}${i.desc && !isA(i) ? ' · ' + esc(i.desc) : ''}</div></div>
     <div style="text-align:end;white-space:nowrap"><span class="a ${c > 0 ? 'pos' : c < 0 ? 'neg' : ''}">${c > 0 ? '+' : c < 0 ? '−' : ''}${fmt(i.amount)}</span>
-    <div class="s">${c === 0 ? T('noCash') : i.balance !== undefined ? T('balAfter') + ' ' + fmt(i.balance) : ''}</div></div></div>`; }).join('') : `<div class="empty">${T('noEntries')}</div>`}</div>
+    <div class="s">${c === 0 ? (i.by === 'آجل' ? T('credit') + ' · ' + esc(i.supplier || '') : T('noCash')) : i.balance !== undefined ? T('balAfter') + ' ' + fmt(i.balance) : ''}</div></div></div>`; }).join('') : `<div class="empty">${T('noEntries')}</div>`}</div>
   <p class="hint">${T('editInSheet')}</p></div>`;
   view().querySelectorAll('[data-g]').forEach(b => b.onclick = () => { JF[b.dataset.g] = b.dataset.v; renderJournal(items); });
 }
@@ -743,6 +767,7 @@ async function viewBuy() {
     </div>
     <p class="hint" id="up"></p>
     <div class="field"><label for="date">${T('date')}</label><input id="date" type="date" value="${today()}"></div>
+    ${payBox()}
     <div class="field"><label for="supplier">${T('supplier')}</label><input id="supplier" list="suppliers" placeholder="${T('supplierPh')}">${supplierList(cfg)}</div>
     <div class="field"><label for="desc">${T('desc')}</label><input id="desc"></div>
     <p class="hint">${T('buyHint')}</p>
@@ -756,14 +781,16 @@ async function viewBuy() {
     $('#up').textContent = q > 0 && t > 0 ? `${T('unitPrice')}: ${qf(t / q)} ${T('egp')} / ${dn(unitNow())}` : '';
   };
   ['prod', 'punit', 'qty', 'total'].forEach(id => $('#' + id).addEventListener('input', upd)); upd();
+  payInit($('#f'));
   submitWith($('#f'), 'addPurchase', () => {
+    needSup();
     const isNew = $('#prod').value === '__new';
     const product = isNew ? $('#pname').value.trim() : $('#prod').value;
     if (!product) throw new Error(T('enterProduct'));
     const qty = Number($('#qty').value), total = Number($('#total').value);
     if (!(qty > 0)) throw new Error(T('enterQty'));
     if (!(total > 0)) throw new Error(T('enterAmount'));
-    const d = { date: $('#date').value, product, qty, total, supplier: $('#supplier').value, desc: $('#desc').value };
+    const d = { date: $('#date').value, product, qty, total, supplier: $('#supplier').value, desc: $('#desc').value, pay: isCredit() ? 'آجل' : 'كاش' };
     if (isNew) Object.assign(d, { item: $('#pitem').value, unit: $('#punit').value, nameEn: $('#pen').value.trim() });
     return d;
   }, () => { store.del('cfg'); CFG = null; location.hash = '#stock'; });
@@ -838,4 +865,57 @@ function renderAssetInfo(x) {
     <section class="list"><h2 style="font-size:15px">${T('spentOn')} (${x.lines.length})</h2>
       ${x.lines.length ? x.lines.map(l => `<div class="item"><div><div class="t">${esc(l.desc)}</div><div class="s">${esc(l.date)}${l.supplier ? ' · ' + esc(l.supplier) : ''}</div></div><span class="a">${fmt(l.amount)}</span></div>`).join('') : `<div class="empty">${T('noMoves')}</div>`}
     </section></div>`;
+}
+
+// ===================== الموردين =====================
+const getSup = () => api.get('suppliers').catch(e => { if (/غير معروف/.test(e.message)) throw new Error(T('needDeploy')); throw e; });
+function viewSuppliers() { showCached('suppliers', getSup, renderSuppliers, viewSuppliers); }
+function renderSuppliers(d) {
+  view().innerHTML = `${bar(T('suppliers'), '#home')}<div class="wrap">
+    <section class="card"><span class="muted">${T('payable')}</span><span class="big ${d.due > 0.5 ? 'neg' : ''}">${fmt(d.due)} <small style="font-size:15px">${T('egp')}</small></span>
+      <a class="btn sm out" href="#paysup">${T('paySup')}</a></section>
+    ${d.items.length ? `<div class="list">${d.items.map(x => `<a class="item" href="#supplier/${enc(x.name)}" style="text-decoration:none;color:inherit"><div>
+      <div class="t">${esc(x.name)}</div><div class="s">${T('creditBuys')} ${fmt(x.credit)} · ${T('paidTo')} ${fmt(x.paid)}</div></div>
+      <div style="text-align:end"><b class="${x.due > 0.5 ? 'neg' : ''}">${fmt(x.due)}</b><div class="s">${T('due')}</div></div></a>`).join('')}</div>` : `<div class="empty">${T('noSuppliers')}</div>`}
+  </div>`;
+}
+function viewSupplierInfo(name) {
+  const show = d => { const x = d.items.find(i => i.name === name); if (!x) { location.hash = '#suppliers'; return; } renderSupplierInfo(x); };
+  const c = store.get('v_suppliers', null);
+  if (c && c.d) return show(c.d);
+  showCached('suppliers', getSup, show, () => viewSupplierInfo(name));
+}
+function renderSupplierInfo(x) {
+  view().innerHTML = `${bar(x.name, '#suppliers')}<div class="wrap">
+    <section class="card">
+      <div class="row"><span class="muted">${T('creditBuys')}</span><b>${fmt(x.credit)}</b></div>
+      <div class="row"><span class="muted">${T('paidTo')}</span><b>${fmt(x.paid)}</b></div>
+      <div class="row"><span class="muted">${T('due')}</span><b class="${x.due > 0.5 ? 'neg' : ''}">${fmt(x.due)}</b></div>
+      ${x.due > 0.5 ? `<a class="btn sm out" href="#paysup/${enc(x.name)}">${T('payAll')}</a>` : ''}
+    </section>
+    <section class="list">${x.lines.map(l => `<div class="item"><div><div class="t">${esc(l.desc || (l.type === 'pay' ? T('paySup') : T('credit')))}<span class="tag">${l.type === 'pay' ? T('paySup') : T('credit')}</span></div><div class="s">${esc(l.date)}</div></div>
+      <span class="a ${l.type === 'pay' ? 'pos' : 'neg'}">${l.type === 'pay' ? '−' : '+'}${fmt(l.amount)}</span></div>`).join('')}</section>
+  </div>`;
+}
+async function viewPaySup(pre) {
+  loading();
+  let d; try { await loadConfig(); d = await getSup(); putView('suppliers', d); } catch (e) { return errorView(e, () => viewPaySup(pre)); }
+  const owed = d.items.filter(x => x.due > 0.5);
+  if (!owed.length) { view().innerHTML = `${bar(T('paySup'), '#add')}<div class="wrap"><div class="empty">${T('noSuppliers')}</div></div>`; return; }
+  view().innerHTML = `${bar(T('paySup'), '#add')}<div class="wrap"><form id="f" novalidate>
+    <div class="field"><label for="sup">${T('supplierOnly')}</label><select id="sup">${owed.map(x => `<option value="${esc(x.name)}" ${x.name === pre ? 'selected' : ''}>${esc(x.name)} — ${fmt(x.due)}</option>`).join('')}</select></div>
+    <div class="grid2">
+      <div class="field"><label for="date">${T('date')}</label><input id="date" type="date" value="${today()}"></div>
+      <div class="field"><label for="amount">${T('amount')}</label><input id="amount" type="number" inputmode="decimal" min="0" step="any"></div>
+    </div>
+    <div class="field"><label for="desc">${T('desc')}</label><input id="desc"></div>
+    <button class="btn" type="submit">${T('savePay')}</button>
+  </form></div>`;
+  const setMax = () => { const x = owed.find(o => o.name === $('#sup').value); $('#amount').value = Math.round(x.due); };
+  $('#sup').onchange = setMax; setMax();
+  submitWith($('#f'), 'paySupplier', () => {
+    const amount = Number($('#amount').value);
+    if (!(amount > 0)) throw new Error(T('enterAmount'));
+    return { supplier: $('#sup').value, date: $('#date').value, amount, desc: $('#desc').value };
+  }, () => { location.hash = '#suppliers'; });
 }
