@@ -1,7 +1,7 @@
 // بيخلّي الأب يتثبّت كأبلكيشن ويفتح لو النت ضعيف.
 // بيجيب الملفات من النت الأول (عشان أي تعديل يظهر على طول)، ولو النت مش موجود بيستخدم النسخة المحفوظة.
-const CACHE = 'amf-v14';
-const SHELL = ['./', 'index.html', 'app.js', 'style.css', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png'];
+const CACHE = 'amf-v15';
+const SHELL = ['./', 'index.html', 'app.js', 'style.css', 'manifest.json', 'icons/palm-192.png', 'icons/palm-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
